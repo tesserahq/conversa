@@ -30,7 +30,9 @@ class ConversationEventService:
             message_id=inbound.message_id,
             text=inbound.text or None,
             attachments=inbound.attachments or [],
-            metadata_=inbound.metadata.model_dump() if inbound.metadata else {},
+            metadata_=(
+                inbound.metadata.model_dump(mode="json") if inbound.metadata else {}
+            ),
         )
         self.db.add(event)
         self.db.commit()

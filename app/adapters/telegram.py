@@ -46,7 +46,12 @@ class TelegramAdapter(BasePlatformAdapter):
         if not expected:
             return True
         request_headers = request_headers or {}
-        actual = request_headers.get(self.TELEGRAM_SECRET_HEADER)
+        header_lower = self.TELEGRAM_SECRET_HEADER.lower()
+        actual = None
+        for key, value in request_headers.items():
+            if key.lower() == header_lower:
+                actual = value
+                break
         return actual == expected
 
     def parse_webhook(self, raw_payload: dict[str, Any]) -> InboundMessage:

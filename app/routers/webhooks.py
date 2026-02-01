@@ -49,6 +49,8 @@ async def telegram_webhook(
             detail="Telegram integration is not configured or disabled",
         )
     settings = get_settings()
+    print(f"Telegram webhook secret: {settings.telegram_webhook_secret}")
+    print(f"Headers: {request.headers}")
     headers = dict(request.headers) if request.headers else {}
     if not adapter.verify_webhook(settings.telegram_webhook_secret, headers):
         raise HTTPException(status_code=403, detail="Invalid webhook secret")

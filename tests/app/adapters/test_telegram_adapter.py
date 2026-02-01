@@ -1,7 +1,7 @@
 """Tests for TelegramAdapter."""
 
 from datetime import datetime, timezone
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -63,6 +63,23 @@ def test_verify_webhook_with_secret():
     )
 
 
+def test_verify_webhook_case_insensitive_header():
+    """Headers are case-insensitive; Starlette/FastAPI lowercases them."""
+    adapter = TelegramAdapter(bot_token=FAKE_TOKEN, webhook_secret="my-secret")
+    assert (
+        adapter.verify_webhook(
+            "my-secret", {"x-telegram-bot-api-secret-token": "my-secret"}
+        )
+        is True
+    )
+    assert (
+        adapter.verify_webhook(
+            "my-secret", {"X-TELEGRAM-BOT-API-SECRET-TOKEN": "my-secret"}
+        )
+        is True
+    )
+
+
 def test_parse_webhook(telegram_adapter):
     payload = minimal_telegram_update()
     inbound = telegram_adapter.parse_webhook(payload)
@@ -80,12 +97,21 @@ def test_parse_webhook_no_message_raises(telegram_adapter):
 
 @pytest.mark.asyncio
 async def test_send_returns_result():
+    """Send returns OutboundSendResult; mocks Bot API to avoid real calls."""
     adapter = TelegramAdapter(bot_token=FAKE_TOKEN)
     outbound = OutboundMessage(
         channel=Channel.TELEGRAM,
         external_user_id="123",
         text="hi",
     )
-    result = await adapter.send(outbound)
+    mock_msg = MagicMock()
+    mock_msg.message_id = 42
+    mock_bot = MagicMock()
+    mock_bot.send_message = AsyncMock(return_value=mock_msg)
+
+    with patch.object(adapter, "_get_bot", return_value=mock_bot):
+        result = await adapter.send(outbound)
+
     assert isinstance(result, OutboundSendResult)
-    assert result.success is False
+    assert result.success is True
+    assert result.platform_message_id == "42"
