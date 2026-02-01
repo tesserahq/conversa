@@ -1,0 +1,79 @@
+[project]
+name = "conversa"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "mustela",email = "ejankowski@gmail.com"}
+]
+packages = [
+    { include = "app" }
+]
+readme = "README.md"
+requires-python = ">=3.11"
+
+[tool.poetry]
+packages = [
+    { include = "app" }
+]
+
+[tool.poetry.scripts]
+dev = "run:dev"
+worker = "run_worker:main"
+nats_worker = "run_nats_worker:main"
+
+[tool.poetry.dependencies]
+python = ">=3.11,<3.14"
+fastapi = "^0.128.0"
+python-dotenv = "^1.0.0"
+sqlalchemy = "^2.0.39"
+asyncpg = "^0.31.0"
+gunicorn = "^23.0.0"
+alembic = "^1.15.1"
+faker = "^40.0.0"
+psycopg2-binary = "^2.9.10"
+pydantic = {extras = ["email"], version = "^2.11.3"}
+black = "^26.1.0"
+ruff = "^0.14.0"
+pydantic-settings = "^2.9.1"
+python-jose = "^3.3.0"
+
+opentelemetry-instrumentation-fastapi = "^0.60b1"
+opentelemetry-exporter-otlp-proto-grpc = "^1.39.1"
+opentelemetry-sdk = "^1.39.1"
+opentelemetry-instrumentation-sqlalchemy = "^0.60b1"
+opentelemetry-instrumentation-logging = "^0.60b1"
+prometheus-client = ">=0.23.1"
+opentelemetry-instrumentation-requests = "^0.60b1"
+
+requests = "^2.32.3"
+pyjwt = "^2.10.1"
+sqlalchemy-json = "^0.7.0"
+cryptography = "^46.0.3"
+fernet = "^1.0.1"
+celery = "^5.5.2"
+rollbar = "^1.3.0"
+fastmcp = "^2.6.0"
+redis = "^7.0.0"
+fastapi-pagination = "^0.15.0"
+# tessera-sdk = { path = "../tessera-sdk-py/", develop = true }
+tessera-sdk = { git = "https://github.com/tesserahq/tessera-sdk-py.git", branch = "main" }
+python-slugify = "^8.0.4"
+pytz = "^2025.2"
+postmarker = "^1.0"
+mako = "^1.3.10"
+faststream = {extras = ["nats"], version = "^0.6.3"}
+algoliasearch = "^3.0.0"
+python-telegram-bot = "22.6"
+
+[tool.poetry.dependencies.uvicorn]
+extras = [ "standard" ]
+version = "^0.40.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^9.0.0"
+httpx = "^0.28.0"  # Required by FastAPI TestClient
+pytest-asyncio = "^1.0.0"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
