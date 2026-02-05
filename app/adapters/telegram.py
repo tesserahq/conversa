@@ -11,7 +11,6 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from telegram import Bot, Update
-from telegram.error import TelegramError
 
 from app.adapters.base import BasePlatformAdapter
 from app.schemas.conversa import (
@@ -103,15 +102,18 @@ class TelegramAdapter(BasePlatformAdapter):
         if outbound.channel != Channel.TELEGRAM:
             return OutboundSendResult(success=False, platform_message_id=None)
 
-        sent = await self._get_bot().send_message(
-            chat_id=outbound.external_user_id,
-            text=outbound.text,
-            reply_to_message_id=(
+        send_kw: dict[str, Any] = {
+            "chat_id": outbound.external_user_id,
+            "text": outbound.text,
+            "reply_to_message_id": (
                 int(outbound.reply_to_message_id)
                 if outbound.reply_to_message_id
                 else None
             ),
-        )
+        }
+        if outbound.parse_mode:
+            send_kw["parse_mode"] = outbound.parse_mode
+        sent = await self._get_bot().send_message(**send_kw)
         return OutboundSendResult(
             success=True,
             platform_message_id=(

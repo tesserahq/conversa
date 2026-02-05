@@ -1,6 +1,6 @@
 """Tests for webhook routes."""
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -50,7 +50,7 @@ def minimal_telegram_update():
     }
 
 
-@patch("app.routers.webhooks.get_settings")
+@patch("app.commands.base_telegram.get_settings")
 def test_telegram_webhook_disabled(mock_settings, client_no_auth: TestClient):
     mock_settings.return_value.telegram_enabled = False
     mock_settings.return_value.telegram_bot_token = None
@@ -59,11 +59,17 @@ def test_telegram_webhook_disabled(mock_settings, client_no_auth: TestClient):
     assert resp.status_code == 503
 
 
-@patch("app.routers.webhooks.get_settings")
-def test_telegram_webhook_invalid_secret(mock_settings, client_no_auth: TestClient):
-    mock_settings.return_value.telegram_enabled = True
-    mock_settings.return_value.telegram_bot_token = "fake"
-    mock_settings.return_value.telegram_webhook_secret = "secret"
+@patch("app.commands.webhooks.telegram_command.get_settings")
+@patch("app.commands.base_telegram.get_settings")
+def test_telegram_webhook_invalid_secret(
+    mock_base_settings, mock_cmd_settings, client_no_auth: TestClient
+):
+    settings = MagicMock()
+    settings.telegram_enabled = True
+    settings.telegram_bot_token = "fake"
+    settings.telegram_webhook_secret = "secret"
+    mock_base_settings.return_value = settings
+    mock_cmd_settings.return_value = settings
     resp = client_no_auth.post(
         "/webhooks/telegram",
         json=minimal_telegram_update(),
@@ -72,11 +78,17 @@ def test_telegram_webhook_invalid_secret(mock_settings, client_no_auth: TestClie
     assert resp.status_code == 403
 
 
-@patch("app.routers.webhooks.get_settings")
-def test_telegram_webhook_success(mock_settings, client_no_auth: TestClient):
-    mock_settings.return_value.telegram_enabled = True
-    mock_settings.return_value.telegram_bot_token = "fake"
-    mock_settings.return_value.telegram_webhook_secret = None
+@patch("app.commands.webhooks.telegram_command.get_settings")
+@patch("app.commands.base_telegram.get_settings")
+def test_telegram_webhook_success(
+    mock_base_settings, mock_cmd_settings, client_no_auth: TestClient
+):
+    settings = MagicMock()
+    settings.telegram_enabled = True
+    settings.telegram_bot_token = "fake"
+    settings.telegram_webhook_secret = None
+    mock_base_settings.return_value = settings
+    mock_cmd_settings.return_value = settings
     resp = client_no_auth.post("/webhooks/telegram", json=minimal_telegram_update())
     assert resp.status_code == 200
     assert resp.json() == {"status": "ok"}

@@ -3,7 +3,6 @@
 import pytest
 from sqlalchemy.orm import Session
 
-from app.models.conversation_event import ConversationEvent
 from app.schemas.conversa import (
     Channel,
     InboundMessage,

@@ -2,7 +2,7 @@ import asyncio
 import sys
 from app.config import get_settings
 from app.core.logging_config import LoggingConfig, get_logger
-from app.tasks.process_nats_event import process_nats_event_task
+from app.tasks.process_nats_event_task import process_nats_event_task
 from faststream import FastStream
 from faststream.nats import NatsBroker, JStream
 from nats.js.api import DeliverPolicy
@@ -50,7 +50,7 @@ async def _run_async() -> None:
     subscriber_kwargs = {"queue": settings.nats_queue} if settings.nats_queue else {}
 
     @broker.subscriber(
-        "com.>",
+        "com.identies.>",
         stream=js_stream,  # THIS makes it JetStream
         durable=settings.nats_queue,  # durable consumer name
         deliver_policy=DeliverPolicy.LAST,  # or DeliverPolicy.LAST, etc.

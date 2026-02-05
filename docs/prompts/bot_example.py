@@ -2,7 +2,6 @@ import logging
 
 from telegram import (
     Update,
-    ForceReply,
     InlineKeyboardMarkup,
     InlineKeyboardButton,
     ParseMode,
