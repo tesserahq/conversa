@@ -50,6 +50,7 @@ class OutboundMessage(BaseModel):
         None  # Optional; omit to send a new message to the chat
     )
     attachments: list[dict[str, Any]] = Field(default_factory=list)
+    parse_mode: Optional[str] = None  # Telegram: "HTML" or "Markdown" for formatting
 
 
 class OutboundSendResult(BaseModel):

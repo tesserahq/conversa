@@ -2,8 +2,6 @@
 
 from datetime import datetime, timezone
 
-import pytest
-from pydantic import ValidationError
 
 from app.schemas.conversa import (
     Channel,

@@ -3392,7 +3392,7 @@ optional = false
 python-versions = ">=3.11"
 groups = ["main"]
 files = []
-develop = false
+develop = true
 
 [package.dependencies]
 cryptography = "^46.0.3"
@@ -3409,10 +3409,8 @@ starlette = ">=0.50.0"
 urllib3 = ">=1.26.0"
 
 [package.source]
-type = "git"
-url = "https://github.com/tesserahq/tessera-sdk-py.git"
-reference = "main"
-resolved_reference = "a8c576df5daa072c436a777ece68b5aab8c3222e"
+type = "directory"
+url = "../tessera-sdk-py"
 
 [[package]]
 name = "text-unidecode"
@@ -3941,4 +3939,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.14"
-content-hash = "15c2bcb566e2cc888f7a50afe313b74aa097edb7a38f02efe4770b745dc4edd6"
+content-hash = "b4eb00048b97de2becfbb83a9fc0865f935cb9fc7d532abb25b7f606fffb31f9"

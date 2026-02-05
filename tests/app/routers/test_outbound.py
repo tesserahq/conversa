@@ -1,13 +1,10 @@
 """Tests for outbound API."""
 
-from unittest.mock import patch, MagicMock
-
 import pytest
 from fastapi.testclient import TestClient
 
 from app.main import create_app
 from app.db import get_db
-from app.schemas.conversa import OutboundSendResult
 
 
 @pytest.fixture

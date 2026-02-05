@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "🚀 Starting NATS worker..."
+echo "🚀 Starting Conversa NATS worker..."
 
 # Start NATS worker
 python run_nats_worker.py
