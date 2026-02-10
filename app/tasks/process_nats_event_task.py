@@ -37,25 +37,24 @@ def process_nats_event_task(msg: Dict) -> Optional[str]:
         logger.warning("Invalid NATS event payload: %s", e)
         return None
 
-    external_user_id = event.event_data["external_account"]["external_id"]
-    platform = event.event_data["external_account"]["platform"]
-
     # It means the external account was linked to the user
     # So we need to notify the user
-    if (
-        event.event_type == "com.identies.external_account.linked"
-        and platform == Channel.TELEGRAM
-    ):
-        outbound_body = OutboundMessage(
-            channel=Channel.TELEGRAM,
-            external_user_id=external_user_id,
-            text=("Your account has been linked to your Telegram account!"),
-        )
+    if event.event_type == "com.identies.external_account.linked":
 
-        logger.info("Sending outbound message to user: %s", outbound_body)
+        external_user_id = event.event_data["external_account"]["external_id"]
+        platform = event.event_data["external_account"]["platform"]
 
-        with db_manager.db_session() as db:
-            send_outbound = SendOutboundCommand(db)
-            asyncio.run(send_outbound.execute(outbound_body))
+        if platform == Channel.TELEGRAM:
+            outbound_body = OutboundMessage(
+                channel=Channel.TELEGRAM,
+                external_user_id=external_user_id,
+                text=("Your account has been linked to your Telegram account!"),
+            )
+
+            logger.info("Sending outbound message to user: %s", outbound_body)
+
+            with db_manager.db_session() as db:
+                send_outbound = SendOutboundCommand(db)
+                asyncio.run(send_outbound.execute(outbound_body))
 
     return event.id
