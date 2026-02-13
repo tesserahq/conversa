@@ -2,7 +2,7 @@ import os
 import sys
 import socket
 
-from app.core.celery_app import celery_app
+from app.infra.celery_app import celery_app
 
 
 def main():

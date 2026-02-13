@@ -1,7 +1,10 @@
 import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
+from app.routers.webhooks import webhooks_router
 import rollbar
 from rollbar.logger import RollbarHandler
 from rollbar.contrib.fastapi import ReporterMiddleware as RollbarMiddleware
@@ -10,11 +13,36 @@ from fastapi_pagination import add_pagination
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from app.telemetry import setup_tracing
 from app.exceptions.handlers import register_exception_handlers
-from app.core.logging_config import get_logger
+from app.infra.logging_config import get_logger
 from app.db import db_manager
 from app.utils.metrics import PrometheusMiddleware, metrics
+from app.infra.logging_config import get_logger
 
-SKIP_AUTH_PATHS = ["/health", "/openapi.json", "/docs", "/metrics", "/webhooks"]
+logger = get_logger()
+
+SKIP_AUTH_PATHS = ["/health", "/openapi.json", "/docs", "/metrics"]
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup: init Telegram plugin when enabled. Shutdown: stop Telegram."""
+    settings = get_settings()
+
+    if settings.telegram_enabled and settings.telegram_bot_token:
+        from app.channels.plugins.telegram.plugin import TelegramPlugin
+        from app.channels.plugins.telegram.config import TelegramConfig
+        from app.core.app_state import state
+
+        telegram = TelegramPlugin(TelegramConfig(bot_token=settings.telegram_bot_token))
+        state.registry.register_channel(telegram)
+        await telegram.start()
+        app.state.telegram = telegram
+    else:
+        app.state.telegram = None
+    yield
+    telegram = getattr(app.state, "telegram", None)
+    if telegram:
+        await telegram.stop()
 
 
 class EndpointFilter(logging.Filter):
@@ -31,7 +59,7 @@ def create_app(testing: bool = False, auth_middleware=None) -> FastAPI:
     logger = get_logger()
     settings = get_settings()
 
-    app = FastAPI()
+    app = FastAPI(lifespan=lifespan)
     if settings.is_production:
         # Initialize Rollbar SDK with your server-side access token
         rollbar.init(settings.rollbar_access_token, environment=settings.environment)
@@ -87,11 +115,8 @@ def create_app(testing: bool = False, auth_middleware=None) -> FastAPI:
     # Add pagination support
     add_pagination(app)
 
-    # Conversa: webhooks (inbound) and outbound API
-    from app.routers import webhooks, outbound
-
-    app.include_router(webhooks.router)
-    app.include_router(outbound.router)
+    # Chat gateway and webhooks
+    app.include_router(webhooks_router)
 
     return app
 

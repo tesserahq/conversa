@@ -59,34 +59,8 @@ def upgrade() -> None:
         sa.Column("deleted_at", sa.DateTime(), nullable=True),
     )
 
-    op.create_table(
-        "events",
-        sa.Column("id", sa.UUID(), nullable=False),
-        sa.Column("source", sa.String, nullable=False),
-        sa.Column("spec_version", sa.String, nullable=False),
-        sa.Column("event_type", sa.String, nullable=False),
-        sa.Column(
-            "event_data", postgresql.JSONB(astext_type=sa.Text()), nullable=False
-        ),
-        sa.Column("data_content_type", sa.String, nullable=False),
-        sa.Column("subject", sa.String, nullable=False),
-        sa.Column("time", sa.DateTime, nullable=False),
-        sa.Column("tags", sa.ARRAY(sa.String), nullable=True),
-        sa.Column("labels", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column("privy", sa.Boolean, nullable=False, default=False),
-        sa.Column(
-            "created_at", sa.DateTime, nullable=False, server_default=sa.text("now()")
-        ),
-        sa.Column(
-            "updated_at", sa.DateTime, nullable=False, server_default=sa.text("now()")
-        ),
-        sa.Column("deleted_at", sa.DateTime(), nullable=True),
-        sa.PrimaryKeyConstraint("id"),
-    )
-
 
 def downgrade() -> None:
     # Drop tables in reverse order
-    op.drop_table("events")
     op.drop_table("users")
     op.drop_table("app_settings")

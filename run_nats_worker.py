@@ -1,7 +1,7 @@
 import asyncio
 import sys
 from app.config import get_settings
-from app.core.logging_config import LoggingConfig, get_logger
+from app.infra.logging_config import LoggingConfig, get_logger
 from app.tasks.process_nats_event_task import process_nats_event_task
 from faststream import FastStream
 from faststream.nats import NatsBroker, JStream

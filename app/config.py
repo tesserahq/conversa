@@ -116,6 +116,17 @@ class Settings(BaseSettings):
         json_schema_extra={"env": "CONVERSA_RATE_LIMIT_PER_USER_PER_MINUTE"},
     )
 
+    # LLM / LiteLLM
+    llm_model: str = Field(
+        default="gpt-4o-mini", json_schema_extra={"env": "LLM_MODEL"}
+    )
+    litellm_api_key: Optional[str] = Field(
+        default=None, json_schema_extra={"env": "LITELLM_API_KEY"}
+    )
+    litellm_api_base: Optional[str] = Field(
+        default=None, json_schema_extra={"env": "LITELLM_API_BASE"}
+    )
+
     @model_validator(mode="before")
     def set_database_url(cls, values):
         """Set the database_url dynamically based on the environment field."""
