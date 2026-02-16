@@ -116,6 +116,22 @@ class Settings(BaseSettings):
         json_schema_extra={"env": "CONVERSA_RATE_LIMIT_PER_USER_PER_MINUTE"},
     )
 
+    # Session expiry (daily / idle)
+    session_expiry_mode: str = Field(
+        default="off",
+        json_schema_extra={"env": "SESSION_EXPIRY_MODE"},
+    )
+    session_expiry_at_hour: int = Field(
+        default=4,
+        ge=0,
+        le=23,
+        json_schema_extra={"env": "SESSION_EXPIRY_AT_HOUR"},
+    )
+    session_expiry_idle_minutes: Optional[int] = Field(
+        default=None,
+        json_schema_extra={"env": "SESSION_EXPIRY_IDLE_MINUTES"},
+    )
+
     # LLM / LiteLLM
     llm_model: str = Field(
         default="gpt-4o-mini", json_schema_extra={"env": "LLM_MODEL"}

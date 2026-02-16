@@ -13,8 +13,11 @@ from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filte
 from app.channels.base import ChannelCapabilities, ChannelMeta
 from app.channels.envelope import InboundMessage, OutboundMessage
 from app.core.app_state import state
-from .config import TelegramConfig
+from app.db import SessionLocal
 from app.infra.logging_config import get_logger
+from app.services.session_manager import SessionManager
+from app.utils.db.db_session_helper import db_session
+from .config import TelegramConfig
 
 logger = get_logger()
 
@@ -89,11 +92,30 @@ class TelegramPlugin:
             raw=update.to_dict(),
         )
 
-        reply = await state.router.route_to_llm(inbound)
+    
+        linked_user = state.router._linker.get_linked_user(
+            inbound.channel, inbound.sender_id
+        )
+        user_id = linked_user.id if linked_user else None
+        
+        reply = await state.router.route_to_llm(
+            inbound, user_id=user_id
+        )
+
         await self.send(reply)
 
     async def handle_inbound(self, msg: InboundMessage) -> None:
-        reply = await state.router.route_to_llm(msg)
+         
+        try:
+            linked_user = state.router._linker.get_linked_user(
+                msg.channel, msg.sender_id
+            )
+            user_id = linked_user.id if linked_user else None 
+            reply = await state.router.route_to_llm(
+                msg, user_id=user_id
+            )
+        finally:
+            db.close()
         await self.send(reply)
 
     async def send(self, msg: OutboundMessage) -> None:

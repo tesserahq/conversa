@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
 from app.routers.webhooks import webhooks_router
+from app.routers.sessions_router import sessions_router
 import rollbar
 from rollbar.logger import RollbarHandler
 from rollbar.contrib.fastapi import ReporterMiddleware as RollbarMiddleware
@@ -117,6 +118,7 @@ def create_app(testing: bool = False, auth_middleware=None) -> FastAPI:
 
     # Chat gateway and webhooks
     app.include_router(webhooks_router)
+    app.include_router(sessions_router)
 
     return app
 

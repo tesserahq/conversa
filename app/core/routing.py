@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+from typing import Optional
+from uuid import UUID
+
 from app.channels.envelope import InboundMessage, OutboundMessage
-from app.workers.llm import LLMRunner, build_llm_runner_from_env
 from app.core.linker import Linker
+from app.services.session_manager import SessionManager
+from app.workers.llm import LLMRunner, build_llm_runner_from_env
+from app.utils.db.db_session_helper import db_session
 
 LINK_URL = "https://app.mylinden.family/link/{link_token}"
 
@@ -16,20 +21,31 @@ class Router:
         self._llm = llm or build_llm_runner_from_env()
         self._linker = Linker()
 
-    async def route_to_llm(self, msg: InboundMessage) -> OutboundMessage:
+    async def route_to_llm(
+        self,
+        msg: InboundMessage,
+        user_id: Optional[UUID] = None,
+    ) -> OutboundMessage:
         if self.is_linked(msg.channel, msg.sender_id) is False:
             return self._create_link_outbound_message(msg)
 
-        reply_text = await self._llm.run(msg)
-        return OutboundMessage(
-            channel=msg.channel,
-            account_id=msg.account_id,
-            chat_id=msg.chat_id,
-            thread_id=msg.thread_id,
-            text=reply_text,
-            reply_to=msg.message_id,
-            media=[],
-        )
+        with db_session() as db:
+            session_manager = SessionManager(db)
+            
+            session = session_manager.get_or_create_session(msg, user_id)
+            history = session_manager.get_history_for_llm(session.id, limit=50)
+            reply_text = await self._llm.run(msg, history=history)
+            outbound = OutboundMessage(
+                channel=msg.channel,
+                account_id=msg.account_id,
+                chat_id=msg.chat_id,
+                thread_id=msg.thread_id,
+                text=reply_text,
+                reply_to=msg.message_id,
+                media=[],
+            )
+            session_manager.add_turn(session.id, msg, outbound)
+        return outbound
 
     def _create_link_outbound_message(self, msg: InboundMessage) -> OutboundMessage:
         link_token = self._linker.generate_link_token(msg.channel, msg.sender_id)

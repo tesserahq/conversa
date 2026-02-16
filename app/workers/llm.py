@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, List, Optional
 
 from pydantic_ai import Agent
 from pydantic_ai.models.openai import OpenAIChatModel
@@ -11,6 +11,33 @@ from app.config import get_settings
 from app.infra.logging_config import get_logger
 
 logger = get_logger()
+
+
+def _history_to_message_list(history: List[dict[str, str]]) -> List[Any]:
+    """Convert list of {role, content} to pydantic_ai ModelMessage list for message_history."""
+    try:
+        from pydantic_ai.messages import (
+            ModelRequest,
+            ModelResponse,
+            SystemPromptPart,
+            TextPart,
+            UserPromptPart,
+        )
+    except ImportError:
+        return []
+    out: List[Any] = []
+    for item in history:
+        role = item.get("role", "user")
+        content = (item.get("content") or "").strip()
+        if not content:
+            continue
+        if role == "user":
+            out.append(ModelRequest(parts=[UserPromptPart(content=content)]))
+        elif role == "assistant":
+            out.append(ModelResponse(parts=[TextPart(content=content)]))
+        elif role == "system":
+            out.append(ModelRequest(parts=[SystemPromptPart(content=content)]))
+    return out
 
 
 class LLMRunner:
@@ -24,9 +51,20 @@ class LLMRunner:
         model = OpenAIChatModel(model_name, provider=provider)
         self._agent = Agent(model)
 
-    async def run(self, msg: InboundMessage) -> str:
+    async def run(
+        self,
+        msg: InboundMessage,
+        history: Optional[List[dict[str, str]]] = None,
+    ) -> str:
         prompt = msg.text or ""
-        result = await self._agent.run(prompt)
+        message_history = _history_to_message_list(history or [])
+        if message_history:
+            result = await self._agent.run(
+                prompt,
+                message_history=message_history,
+            )
+        else:
+            result = await self._agent.run(prompt)
         return str(result.output)
 
 

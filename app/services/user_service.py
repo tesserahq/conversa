@@ -38,9 +38,6 @@ class UserService(SoftDeleteService[User]):
             # Not a valid UUID, only match on external_id
             return self.db.query(User).filter(User.external_id == str(id)).first()
 
-    def get_user_by_username(self, username: str) -> Optional[User]:
-        return self.db.query(User).filter(User.username == username).first()
-
     def get_users(self, skip: int = 0, limit: int = 100) -> List[User]:
         return self.db.query(User).offset(skip).limit(limit).all()
 

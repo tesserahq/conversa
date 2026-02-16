@@ -40,7 +40,6 @@ def upgrade() -> None:
             server_default=sa.text("gen_random_uuid()"),
         ),
         sa.Column("email", sa.String, unique=True, nullable=True),
-        sa.Column("username", sa.String, unique=True, nullable=True),
         sa.Column("avatar_url", sa.String, nullable=True),
         sa.Column("first_name", sa.String, nullable=False),
         sa.Column("last_name", sa.String, nullable=False),

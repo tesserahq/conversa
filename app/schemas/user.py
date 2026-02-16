@@ -13,9 +13,6 @@ class UserBase(BaseModel):
     email: Optional[EmailStr] = None
     """User's email address. Must be a valid email format."""
 
-    username: Optional[str] = None
-    """User's unique username. Can be used for login or display."""
-
     avatar_url: Optional[str] = None
     """URL to the user's profile picture or avatar."""
 
@@ -24,6 +21,9 @@ class UserBase(BaseModel):
 
     last_name: str
     """User's last name. Required field."""
+    
+    preferred_name: Optional[str] = None
+    """User's preferred name. Can be used for display."""
 
     provider: Optional[str] = None
     """Authentication provider (e.g., 'google', 'github', etc.) if user signed up via OAuth."""
@@ -59,9 +59,6 @@ class UserUpdate(BaseModel):
 
     email: Optional[EmailStr] = None
     """Updated email address. Must be a valid email format."""
-
-    username: Optional[str] = None
-    """Updated username."""
 
     avatar_url: Optional[str] = None
     """Updated avatar URL."""
