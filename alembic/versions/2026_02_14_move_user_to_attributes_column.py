@@ -109,5 +109,4 @@ def downgrade() -> None:
     op.alter_column("users", "verified", server_default=None)
     op.alter_column("users", "service_account", server_default=None)
 
-
     op.drop_column("users", "attributes")

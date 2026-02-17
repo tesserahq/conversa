@@ -38,6 +38,7 @@ from app.main import create_app
 
 pytest_plugins = [
     "tests.fixtures.user_fixtures",
+    "tests.fixtures.system_prompt_fixtures",
 ]
 
 logger = logging.getLogger(__name__)

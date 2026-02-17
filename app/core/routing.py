@@ -31,7 +31,6 @@ class Router:
 
         with db_session() as db:
             session_manager = SessionManager(db)
-            
             session = session_manager.get_or_create_session(msg, user_id)
             history = session_manager.get_history_for_llm(session.id, limit=50)
             reply_text = await self._llm.run(msg, history=history)

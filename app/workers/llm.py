@@ -9,8 +9,12 @@ from pydantic_ai.providers.litellm import LiteLLMProvider
 from app.channels.envelope import InboundMessage
 from app.config import get_settings
 from app.infra.logging_config import get_logger
+from app.utils.db.db_session_helper import db_session
+from app.services.system_prompt_service import SystemPromptService
 
 logger = get_logger()
+
+SYSTEM_PROMPT_NAME = "default"
 
 
 def _history_to_message_list(history: List[dict[str, str]]) -> List[Any]:
@@ -46,10 +50,11 @@ class LLMRunner:
         model_name: str,
         api_key: Optional[str] = None,
         api_base: Optional[str] = None,
+        system_prompt: Optional[str] = None,
     ) -> None:
         provider = LiteLLMProvider(api_key=api_key, api_base=api_base)
         model = OpenAIChatModel(model_name, provider=provider)
-        self._agent = Agent(model)
+        self._agent = Agent(model, system_prompt=system_prompt or None)
 
     async def run(
         self,
@@ -78,10 +83,14 @@ def build_llm_runner_from_env() -> LLMRunner:
     )
     if not settings.litellm_api_key:
         logger.warning(
-            "LITELLM_API_KEY33 is not set; set it to a valid OpenAI or LiteLLM API key to avoid 401 errors."
+            "LITELLM_API_KEY is not set; set it to a valid OpenAI or LiteLLM API key to avoid 401 errors."
         )
+    with db_session() as db:
+        system_prompt = SystemPromptService(db).get_current_content(SYSTEM_PROMPT_NAME)
+
     return LLMRunner(
         model_name=settings.llm_model,
         api_key=settings.litellm_api_key,
         api_base=settings.litellm_api_base,
+        system_prompt=system_prompt,
     )

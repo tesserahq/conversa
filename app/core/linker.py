@@ -58,7 +58,7 @@ class Linker:
             external_id=external_id,
         )
         return check_response
-    
+
     def _fetch_user(
         self,
         user_id: UUID,
@@ -78,7 +78,7 @@ class Linker:
             user = user_service.get_user(user_id)
             if user:
                 return user
-            
+
             m2m_token = self._get_m2m_token()
 
             identies_client = IdentiesClient(

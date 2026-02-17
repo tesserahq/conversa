@@ -92,28 +92,23 @@ class TelegramPlugin:
             raw=update.to_dict(),
         )
 
-    
         linked_user = state.router._linker.get_linked_user(
             inbound.channel, inbound.sender_id
         )
         user_id = linked_user.id if linked_user else None
-        
-        reply = await state.router.route_to_llm(
-            inbound, user_id=user_id
-        )
+
+        reply = await state.router.route_to_llm(inbound, user_id=user_id)
 
         await self.send(reply)
 
     async def handle_inbound(self, msg: InboundMessage) -> None:
-         
+
         try:
             linked_user = state.router._linker.get_linked_user(
                 msg.channel, msg.sender_id
             )
-            user_id = linked_user.id if linked_user else None 
-            reply = await state.router.route_to_llm(
-                msg, user_id=user_id
-            )
+            user_id = linked_user.id if linked_user else None
+            reply = await state.router.route_to_llm(msg, user_id=user_id)
         finally:
             db.close()
         await self.send(reply)
