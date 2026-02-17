@@ -18,6 +18,7 @@ from app.infra.logging_config import get_logger
 from app.services.session_manager import SessionManager
 from app.utils.db.db_session_helper import db_session
 from .config import TelegramConfig
+from telegram.request import HTTPXRequest
 
 logger = get_logger()
 
@@ -39,7 +40,12 @@ class TelegramPlugin:
         self._polling_task: Optional[asyncio.Task[None]] = None
 
     async def start(self) -> None:
-        self._app = ApplicationBuilder().token(self.cfg.bot_token).build()
+        request = HTTPXRequest(
+            connection_pool_size=8,
+            connect_timeout=20,
+            read_timeout=20,
+        )
+        self._app = ApplicationBuilder().token(self.cfg.bot_token).request(request).build()
         self._app.add_handler(MessageHandler(filters.ALL, self._on_update))
         await self._app.initialize()
 

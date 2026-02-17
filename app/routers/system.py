@@ -1,7 +1,9 @@
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy.orm import Session
 
+from fastapi import APIRouter, Depends, Request
+
+from app.auth.rbac import build_rbac_dependencies
+from app.routers.system_prompts_router import router as system_prompts_router
 from app.schemas.system import (
     GeneralGroup,
     SystemSettingsGrouped,
@@ -11,17 +13,8 @@ from app.schemas.system import (
     RedisGroup,
     ExternalServicesGroup,
 )
-from app.schemas.system_prompt import (
-    SystemPromptCurrentRead,
-    SystemPromptVersionCreate,
-    SystemPromptVersionRead,
-)
-from tessera_sdk.utils.auth import get_current_user
 from app.config import get_settings
-from app.auth.rbac import build_rbac_dependencies
-from app.db import get_db
-from app.models.system_prompt import SystemPromptVersion
-from app.services.system_prompt_service import SystemPromptService
+from tessera_sdk.utils.auth import get_current_user
 
 router = APIRouter(
     prefix="/system",
@@ -34,11 +27,13 @@ async def infer_domain(request: Request) -> Optional[str]:
     return "*"
 
 
-RESOURCE = "system.settings"
+RESOURCE_SETTINGS = "system.settings"
 rbac = build_rbac_dependencies(
-    resource=RESOURCE,
+    resource=RESOURCE_SETTINGS,
     domain_resolver=infer_domain,
 )
+
+router.include_router(system_prompts_router)
 
 
 @router.get("/settings", response_model=SystemSettingsGrouped)
@@ -105,75 +100,3 @@ def get_system_settings(
     )
 
     return grouped
-
-
-# --- System prompt (markdown, versioned) ---
-
-
-@router.get(
-    "/prompts/{name}/current",
-    response_model=SystemPromptCurrentRead,
-)
-def get_system_prompt_current(
-    name: str,
-    _authorized: bool = Depends(rbac["read"]),
-    _current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
-) -> SystemPromptCurrentRead:
-    """Return the current system prompt content and version info."""
-    svc = SystemPromptService(db)
-    prompt = svc.get_system_prompt_by_name(name)
-    if prompt is None or prompt.current_version_id is None:
-        raise HTTPException(status_code=404, detail="System prompt not found")
-    version = (
-        db.query(SystemPromptVersion)
-        .filter(SystemPromptVersion.id == prompt.current_version_id)
-        .first()
-    )
-    if version is None:
-        raise HTTPException(status_code=404, detail="System prompt version not found")
-    return SystemPromptCurrentRead(
-        content=version.content,
-        version_id=version.id,
-        version_number=version.version_number,
-        updated_at=prompt.updated_at,
-    )
-
-
-@router.get(
-    "/prompts/{name}/versions",
-    response_model=dict,
-)
-def list_system_prompt_versions(
-    name: str,
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=200),
-    _authorized: bool = Depends(rbac["read"]),
-    _current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
-) -> dict:
-    """List version history for the given system prompt, newest first."""
-    svc = SystemPromptService(db)
-    versions = svc.get_versions(name, skip=skip, limit=limit)
-    items = [SystemPromptVersionRead.model_validate(v) for v in versions]
-    return {"items": items}
-
-
-@router.post(
-    "/prompts/{name}/versions",
-    response_model=SystemPromptVersionRead,
-    status_code=201,
-)
-def create_system_prompt_version(
-    name: str,
-    data: SystemPromptVersionCreate,
-    _authorized: bool = Depends(rbac["create"]),
-    _current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
-) -> SystemPromptVersionRead:
-    """Create a new version and set it as the current system prompt."""
-    svc = SystemPromptService(db)
-    version = svc.create_version(name, content=data.content, note=data.note)
-    if version is None:
-        raise HTTPException(status_code=404, detail="System prompt not found")
-    return SystemPromptVersionRead.model_validate(version)

@@ -116,3 +116,73 @@ def test_create_version_unknown_name_returns_none(db):
     svc = SystemPromptService(db)
     version = svc.create_version("nonexistent", "content", note="x")
     assert version is None
+
+
+def test_get_system_prompts(db, setup_system_prompt):
+    """get_system_prompts returns prompts ordered by name."""
+    svc = SystemPromptService(db)
+    prompts = svc.get_system_prompts(skip=0, limit=100)
+    assert isinstance(prompts, list)
+    names = [p.name for p in prompts]
+    assert names == sorted(names)
+    assert setup_system_prompt.name in names
+
+
+def test_get_system_prompt_by_id(db, setup_system_prompt):
+    """get_system_prompt_by_id returns the prompt when it exists."""
+    prompt = setup_system_prompt
+    svc = SystemPromptService(db)
+    found = svc.get_system_prompt_by_id(prompt.id)
+    assert found is not None
+    assert found.id == prompt.id
+
+
+def test_create_prompt(db, faker):
+    """create_prompt creates a new prompt with initial version."""
+    svc = SystemPromptService(db)
+    name = faker.slug() or "new"
+    prompt = svc.create_prompt(name, initial_content="# Hello", note="First")
+    assert prompt.id is not None
+    assert prompt.name == name
+    assert prompt.current_version_id is not None
+    assert svc.get_current_content(name) == "# Hello"
+
+
+def test_create_prompt_duplicate_name_raises(db, setup_system_prompt):
+    """create_prompt raises ValueError when name already exists."""
+    svc = SystemPromptService(db)
+    with pytest.raises(ValueError, match="already exists"):
+        svc.create_prompt(setup_system_prompt.name, initial_content="x")
+
+
+def test_update_prompt_name(db, setup_system_prompt):
+    """update_prompt_name renames the prompt."""
+    prompt = setup_system_prompt
+    old_name = prompt.name
+    svc = SystemPromptService(db)
+    updated = svc.update_prompt_name(old_name, new_name="renamed-prompt")
+    assert updated is not None
+    assert updated.name == "renamed-prompt"
+    assert svc.get_system_prompt_by_name("renamed-prompt") is not None
+    assert svc.get_system_prompt_by_name(old_name) is None
+
+
+def test_update_prompt_name_not_found(db):
+    """update_prompt_name returns None when prompt does not exist."""
+    svc = SystemPromptService(db)
+    assert svc.update_prompt_name("nonexistent", new_name="other") is None
+
+
+def test_delete_prompt(db, setup_system_prompt):
+    """delete_prompt removes the prompt and its versions."""
+    name = setup_system_prompt.name
+    svc = SystemPromptService(db)
+    assert svc.delete_prompt(name) is True
+    assert svc.get_system_prompt_by_name(name) is None
+    assert svc.get_versions(name) == []
+
+
+def test_delete_prompt_not_found(db):
+    """delete_prompt returns False when prompt does not exist."""
+    svc = SystemPromptService(db)
+    assert svc.delete_prompt("nonexistent") is False

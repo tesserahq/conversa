@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import List, Optional
+from uuid import UUID
 
 from sqlalchemy.orm import Session as DBSession
 
@@ -15,9 +16,79 @@ class SystemPromptService:
     def __init__(self, db: DBSession) -> None:
         self.db = db
 
+    def get_system_prompts(
+        self,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> List[SystemPrompt]:
+        """List all system prompts, ordered by name."""
+        return (
+            self.db.query(SystemPrompt)
+            .order_by(SystemPrompt.name)
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
+
     def get_system_prompt_by_name(self, name: str) -> Optional[SystemPrompt]:
         """Fetch a system prompt by name."""
         return self.db.query(SystemPrompt).filter(SystemPrompt.name == name).first()
+
+    def get_system_prompt_by_id(self, prompt_id: UUID) -> Optional[SystemPrompt]:
+        """Fetch a system prompt by id."""
+        return self.db.query(SystemPrompt).filter(SystemPrompt.id == prompt_id).first()
+
+    def create_prompt(
+        self,
+        name: str,
+        initial_content: str = "",
+        note: Optional[str] = None,
+    ) -> SystemPrompt:
+        """
+        Create a new system prompt with an optional first version.
+        Raises ValueError if name already exists.
+        """
+        if self.get_system_prompt_by_name(name) is not None:
+            raise ValueError(f"System prompt with name {name!r} already exists")
+        prompt = SystemPrompt(name=name)
+        self.db.add(prompt)
+        self.db.flush()
+        version = SystemPromptVersion(
+            system_prompt_id=prompt.id,
+            content=initial_content,
+            version_number=1,
+            note=note or "Initial version",
+        )
+        self.db.add(version)
+        self.db.flush()
+        prompt.current_version_id = version.id
+        self.db.commit()
+        self.db.refresh(prompt)
+        return prompt
+
+    def update_prompt_name(self, name: str, new_name: str) -> Optional[SystemPrompt]:
+        """
+        Rename a system prompt. Returns the updated prompt or None if not found.
+        Raises ValueError if new_name is already used by another prompt.
+        """
+        prompt = self.get_system_prompt_by_name(name)
+        if prompt is None:
+            return None
+        if new_name != name and self.get_system_prompt_by_name(new_name) is not None:
+            raise ValueError(f"System prompt with name {new_name!r} already exists")
+        setattr(prompt, "name", new_name)
+        self.db.commit()
+        self.db.refresh(prompt)
+        return prompt
+
+    def delete_prompt(self, name: str) -> bool:
+        """Delete a system prompt and all its versions. Returns True if deleted."""
+        prompt = self.get_system_prompt_by_name(name)
+        if prompt is None:
+            return False
+        self.db.delete(prompt)
+        self.db.commit()
+        return True
 
     def get_current_content(self, name: str) -> Optional[str]:
         """

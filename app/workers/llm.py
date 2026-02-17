@@ -11,6 +11,7 @@ from app.config import get_settings
 from app.infra.logging_config import get_logger
 from app.utils.db.db_session_helper import db_session
 from app.services.system_prompt_service import SystemPromptService
+from app.constants.default_system_prompt import DefaultSystemPrompt
 
 logger = get_logger()
 
@@ -85,8 +86,8 @@ def build_llm_runner_from_env() -> LLMRunner:
         logger.warning(
             "LITELLM_API_KEY is not set; set it to a valid OpenAI or LiteLLM API key to avoid 401 errors."
         )
-    with db_session() as db:
-        system_prompt = SystemPromptService(db).get_current_content(SYSTEM_PROMPT_NAME)
+
+    system_prompt = _get_system_prompt()
 
     return LLMRunner(
         model_name=settings.llm_model,
@@ -94,3 +95,14 @@ def build_llm_runner_from_env() -> LLMRunner:
         api_base=settings.litellm_api_base,
         system_prompt=system_prompt,
     )
+
+
+def _get_system_prompt() -> str:
+    print(f"Getting system prompt from database")
+    with db_session() as db:
+        system_prompt = SystemPromptService(db).get_current_content(SYSTEM_PROMPT_NAME)
+        if system_prompt:
+            return system_prompt
+    print(f"No system prompt found in database, using default")
+
+    return DefaultSystemPrompt.CONTENT
