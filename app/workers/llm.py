@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from typing import Any, List, Optional
 
 from pydantic_ai import Agent
@@ -12,10 +13,25 @@ from app.infra.logging_config import get_logger
 from app.utils.db.db_session_helper import db_session
 from app.services.system_prompt_service import SystemPromptService
 from app.constants.default_system_prompt import DefaultSystemPrompt
+from datetime import datetime
+from pydantic_ai.messages import (
+    ModelRequest,
+    SystemPromptPart,
+)
 
 logger = get_logger()
 
 SYSTEM_PROMPT_NAME = "default"
+
+
+def add_the_date_and_time() -> str:
+    """Return the current date and time. Use when the user asks for today's date or what day it is."""
+    return f"The date and time is {datetime.now()}."
+
+
+def add_the_user_name() -> str:
+    """Return the user's name. Use when the user asks for their name."""
+    return f"The user's name is Peter"
 
 
 def _history_to_message_list(history: List[dict[str, str]]) -> List[Any]:
@@ -45,6 +61,19 @@ def _history_to_message_list(history: List[dict[str, str]]) -> List[Any]:
     return out
 
 
+def _message_list_with_system_prompt(
+    system_prompt: str,
+    history: List[dict[str, str]],
+) -> List[Any]:
+    """Build message_history with system prompt always first, then conversation history."""
+
+    # https://github.com/pydantic/pydantic-ai/issues/4039
+    # https://ai.pydantic.dev/agent/#system-prompts
+    system_message = ModelRequest(parts=[SystemPromptPart(content=system_prompt)])
+    rest = _history_to_message_list(history)
+    return [system_message] + rest
+
+
 class LLMRunner:
     def __init__(
         self,
@@ -55,7 +84,12 @@ class LLMRunner:
     ) -> None:
         provider = LiteLLMProvider(api_key=api_key, api_base=api_base)
         model = OpenAIChatModel(model_name, provider=provider)
-        self._agent = Agent(model, system_prompt=system_prompt or None)
+        logger.info(f"Initializing LLM runner with model {model_name}")
+        self._system_prompt = system_prompt or ""
+        self._agent = Agent(
+            model,
+            tools=[add_the_date_and_time, add_the_user_name],
+        )
 
     async def run(
         self,
@@ -63,14 +97,14 @@ class LLMRunner:
         history: Optional[List[dict[str, str]]] = None,
     ) -> str:
         prompt = msg.text or ""
-        message_history = _history_to_message_list(history or [])
-        if message_history:
-            result = await self._agent.run(
-                prompt,
-                message_history=message_history,
-            )
-        else:
-            result = await self._agent.run(prompt)
+        message_history = _message_list_with_system_prompt(
+            self._system_prompt,
+            history or [],
+        )
+        result = await self._agent.run(
+            prompt,
+            message_history=message_history,
+        )
         return str(result.output)
 
 
