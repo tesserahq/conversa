@@ -156,6 +156,12 @@ class Settings(BaseSettings):
         default=None, json_schema_extra={"env": "LITELLM_API_BASE"}
     )
 
+    # Context sync (Phase 2)
+    context_sync_interval_seconds: int = Field(
+        default=600,
+        json_schema_extra={"env": "CONTEXT_SYNC_INTERVAL_SECONDS"},
+    )
+
     @model_validator(mode="before")
     def set_database_url(cls, values):
         """Set the database_url dynamically based on the environment field."""

@@ -84,6 +84,23 @@ REINDEX_PROGRESS = Gauge(
     ["job_id"],
 )
 
+# Context sync metrics (Phase 2)
+CONTEXT_SNAPSHOT_AGE_SECONDS = Gauge(
+    "context_snapshot_age_seconds",
+    "Age of the latest context snapshot in seconds",
+    ["user_id"],
+)
+CONTEXT_SYNC_TOTAL = Counter(
+    "context_sync_total",
+    "Total context sync attempts by source and status",
+    ["source_id", "status"],
+)
+CONTEXT_PACK_PAYLOAD_BYTES = Histogram(
+    "context_pack_payload_bytes",
+    "Size of context pack payload in bytes",
+    ["source_id"],
+)
+
 
 class PrometheusMiddleware(BaseHTTPMiddleware):
     def __init__(self, app: ASGIApp, app_name: str = "fastapi-app") -> None:
