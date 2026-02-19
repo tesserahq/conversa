@@ -2,12 +2,13 @@
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi_pagination import Page, Params
+from fastapi_pagination.ext.sqlalchemy import paginate
 from sqlalchemy.orm import Session
 
 from app.auth.rbac import build_rbac_dependencies
 from app.db import get_db
-from app.models.system_prompt import SystemPromptVersion
 from app.schemas.system_prompt import (
     SystemPromptCreate,
     SystemPromptCurrentRead,
@@ -30,7 +31,7 @@ async def infer_domain(request: Request) -> Optional[str]:
     return "*"
 
 
-RESOURCE_PROMPTS = "system.prompts"
+RESOURCE_PROMPTS = "system_prompt"
 rbac_prompts = build_rbac_dependencies(
     resource=RESOURCE_PROMPTS,
     domain_resolver=infer_domain,
@@ -39,20 +40,18 @@ rbac_prompts = build_rbac_dependencies(
 
 @router.get(
     "",
-    response_model=dict,
+    response_model=Page[SystemPromptRead],
 )
 def list_system_prompts(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=200),
+    params: Params = Depends(),
     _authorized: bool = Depends(rbac_prompts["read"]),
     _current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> dict:
-    """List all system prompts."""
+) -> Page[SystemPromptRead]:
+    """List all system prompts with pagination."""
     svc = SystemPromptService(db)
-    prompts = svc.get_system_prompts(skip=skip, limit=limit)
-    items = [SystemPromptRead.model_validate(p) for p in prompts]
-    return {"items": items}
+    query = svc.get_system_prompts_query()
+    return paginate(query, params=params)
 
 
 @router.post(
@@ -68,15 +67,12 @@ def create_system_prompt(
 ) -> SystemPromptRead:
     """Create a new system prompt with optional initial content."""
     svc = SystemPromptService(db)
-    try:
-        prompt = svc.create_prompt(
-            name=data.name,
-            initial_content=data.content,
-            note=data.note,
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=409, detail=str(e)) from e
-    return SystemPromptRead.model_validate(prompt)
+    prompt = svc.create_prompt(
+        name=data.name,
+        initial_content=data.content,
+        note=data.note,
+    )
+    return prompt
 
 
 @router.get(
@@ -94,7 +90,7 @@ def get_system_prompt(
     prompt = svc.get_system_prompt_by_name(name)
     if prompt is None:
         raise HTTPException(status_code=404, detail="System prompt not found")
-    return SystemPromptRead.model_validate(prompt)
+    return prompt
 
 
 @router.patch(
@@ -110,13 +106,10 @@ def update_system_prompt(
 ) -> SystemPromptRead:
     """Update a system prompt (e.g. rename)."""
     svc = SystemPromptService(db)
-    try:
-        prompt = svc.update_prompt_name(name, new_name=data.name)
-    except ValueError as e:
-        raise HTTPException(status_code=409, detail=str(e)) from e
+    prompt = svc.update_prompt_name(name, new_name=data.name)
     if prompt is None:
         raise HTTPException(status_code=404, detail="System prompt not found")
-    return SystemPromptRead.model_validate(prompt)
+    return prompt
 
 
 @router.delete(
@@ -147,16 +140,10 @@ def get_system_prompt_current(
 ) -> SystemPromptCurrentRead:
     """Return the current system prompt content and version info."""
     svc = SystemPromptService(db)
-    prompt = svc.get_system_prompt_by_name(name)
-    if prompt is None or prompt.current_version_id is None:
+    result = svc.get_current_version_display(name)
+    if result is None:
         raise HTTPException(status_code=404, detail="System prompt not found")
-    version = (
-        db.query(SystemPromptVersion)
-        .filter(SystemPromptVersion.id == prompt.current_version_id)
-        .first()
-    )
-    if version is None:
-        raise HTTPException(status_code=404, detail="System prompt version not found")
+    version, prompt = result
     return SystemPromptCurrentRead(
         content=str(version.content),
         version_id=version.id,
@@ -167,21 +154,19 @@ def get_system_prompt_current(
 
 @router.get(
     "/{name}/versions",
-    response_model=dict,
+    response_model=Page[SystemPromptVersionRead],
 )
 def list_system_prompt_versions(
     name: str,
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=200),
+    params: Params = Depends(),
     _authorized: bool = Depends(rbac_prompts["read"]),
     _current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> dict:
+) -> Page[SystemPromptVersionRead]:
     """List version history for the given system prompt, newest first."""
     svc = SystemPromptService(db)
-    versions = svc.get_versions(name, skip=skip, limit=limit)
-    items = [SystemPromptVersionRead.model_validate(v) for v in versions]
-    return {"items": items}
+    query = svc.get_versions_query(name)
+    return paginate(query, params=params)
 
 
 @router.post(
@@ -201,4 +186,4 @@ def create_system_prompt_version(
     version = svc.create_version(name, content=data.content, note=data.note)
     if version is None:
         raise HTTPException(status_code=404, detail="System prompt not found")
-    return SystemPromptVersionRead.model_validate(version)
+    return version

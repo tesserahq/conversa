@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import List, Optional
 from uuid import UUID
 
-from sqlalchemy.orm import Session as DBSession
+from sqlalchemy.orm import Query, Session as DBSession
 
 from app.models.system_prompt import SystemPrompt, SystemPromptVersion
 
@@ -29,6 +29,10 @@ class SystemPromptService:
             .limit(limit)
             .all()
         )
+
+    def get_system_prompts_query(self) -> Query[SystemPrompt]:
+        """Get a query for system prompts (for pagination)."""
+        return self.db.query(SystemPrompt).order_by(SystemPrompt.name)
 
     def get_system_prompt_by_name(self, name: str) -> Optional[SystemPrompt]:
         """Fetch a system prompt by name."""
@@ -125,6 +129,36 @@ class SystemPromptService:
             .limit(limit)
             .all()
         )
+
+    def get_versions_query(self, name: str) -> Query[SystemPromptVersion]:
+        """Get a query for versions of the given prompt (for pagination). Returns empty query if prompt not found."""
+        prompt = self.get_system_prompt_by_name(name)
+        if prompt is None:
+            return self.db.query(SystemPromptVersion).filter(False)  # empty result
+        return (
+            self.db.query(SystemPromptVersion)
+            .filter(SystemPromptVersion.system_prompt_id == prompt.id)
+            .order_by(SystemPromptVersion.version_number.desc())
+        )
+
+    def get_current_version_display(
+        self, name: str
+    ) -> Optional[tuple[SystemPromptVersion, SystemPrompt]]:
+        """
+        Return (version, prompt) for the current version of the given prompt.
+        Returns None if the prompt does not exist or has no current version.
+        """
+        prompt = self.get_system_prompt_by_name(name)
+        if prompt is None or prompt.current_version_id is None:
+            return None
+        version = (
+            self.db.query(SystemPromptVersion)
+            .filter(SystemPromptVersion.id == prompt.current_version_id)
+            .first()
+        )
+        if version is None:
+            return None
+        return version, prompt
 
     def create_version(
         self,

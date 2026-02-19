@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, List, Optional
 
-from sqlalchemy.orm import Session as DBSession
+from sqlalchemy.orm import Query, Session as DBSession
 
 from app.channels.envelope import InboundMessage, OutboundMessage
 from app.config import get_settings
@@ -164,11 +164,31 @@ class SessionManager:
             filters["last_message_at"] = {"operator": ">=", "value": cutoff}
         sessions = self._session_svc.search(filters)[:limit]
         if message_limit > 0:
-            for s in sessions:
-                s.messages = self._message_svc.get_messages(
-                    s.id, limit=message_limit, offset=0
-                )
+            self.attach_recent_messages(sessions, message_limit)
         return sessions
+
+    def get_sessions_query(
+        self,
+        channel: Optional[str] = None,
+        active_minutes: Optional[int] = None,
+    ) -> Query[Session]:
+        """Get a query for sessions with filters (for pagination)."""
+        filters: dict[str, Any] = {}
+        if channel is not None:
+            filters["channel"] = channel
+        if active_minutes is not None:
+            cutoff = datetime.now(timezone.utc) - timedelta(minutes=active_minutes)
+            filters["last_message_at"] = {"operator": ">=", "value": cutoff}
+        return self._session_svc.search_query(filters)
+
+    def attach_recent_messages(
+        self, sessions: List[Session], message_limit: int
+    ) -> None:
+        """Attach the last N messages to each session (modifies in place)."""
+        for s in sessions:
+            s.messages = self._message_svc.get_messages(
+                s.id, limit=message_limit, offset=0
+            )
 
     def compact_session(
         self,

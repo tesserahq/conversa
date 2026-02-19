@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from sqlalchemy.orm import Session as DBSession
+from sqlalchemy.orm import Query, Session as DBSession
 
 from app.models.session_message import SessionMessage
 from app.schemas.session import MessageCreate
@@ -45,6 +45,14 @@ class SessionMessageService:
         # include_tools: if False, filter out tool-related messages (e.g. by metadata)
         # For now we don't have tool messages; leave as-is.
         return query.all()
+
+    def get_messages_query(self, session_id: UUID) -> Query[SessionMessage]:
+        """Get a query for messages of a session (for pagination)."""
+        return (
+            self.db.query(SessionMessage)
+            .filter(SessionMessage.session_id == session_id)
+            .order_by(SessionMessage.created_at)
+        )
 
     def delete_messages_for_session(self, session_id: UUID) -> int:
         deleted = (

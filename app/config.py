@@ -1,4 +1,7 @@
 import os
+from pathlib import Path
+
+from dotenv import load_dotenv
 from pydantic import AliasChoices, Field, model_validator
 from typing import Optional
 from pydantic_settings import BaseSettings
@@ -8,6 +11,12 @@ DEFAULT_DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/conversa"
 DEFAULT_TEST_DATABASE_URL = (
     "postgresql://postgres:postgres@localhost:5432/conversa_test"
 )
+
+# Project root (parent of app/) - used so .env is found regardless of cwd
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+# Explicitly load .env into os.environ so it works in tests and subprocesses
+load_dotenv(_PROJECT_ROOT / ".env")
 
 
 class Settings(BaseSettings):
@@ -46,6 +55,10 @@ class Settings(BaseSettings):
     otel_service_name: str = "conversa"
     fernet_key: Optional[str] = Field(
         default=None, json_schema_extra={"env": "FERNET_KEY"}
+    )
+    credential_master_key: Optional[str] = Field(
+        default=None,
+        json_schema_extra={"env": "CREDENTIAL_MASTER_KEY"},
     )
     fernet_salt: str = Field(
         default="default-salt", json_schema_extra={"env": "FERNET_SALT"}
@@ -174,7 +187,7 @@ class Settings(BaseSettings):
         return make_url(self.database_url)
 
     class ConfigDict:
-        env_file = ".env"
+        env_file = str(_PROJECT_ROOT / ".env")
         env_file_encoding = "utf-8"
         extra = "allow"  # Allow extra environment variables
 

@@ -4,9 +4,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
-from app.routers.webhooks import webhooks_router
+from app.routers.context_sources_router import router as context_sources_router
+from app.routers.credentials_router import router as credentials_router
 from app.routers.sessions_router import sessions_router
 from app.routers.system import router as system_router
+from app.routers.system_prompts_router import router as system_prompts_router
+from app.routers.webhooks import webhooks_router
 import rollbar
 from rollbar.logger import RollbarHandler
 from rollbar.contrib.fastapi import ReporterMiddleware as RollbarMiddleware
@@ -121,6 +124,9 @@ def create_app(testing: bool = False, auth_middleware=None) -> FastAPI:
     app.include_router(webhooks_router)
     app.include_router(sessions_router)
     app.include_router(system_router)
+    app.include_router(system_prompts_router, prefix="/system-prompts")
+    app.include_router(context_sources_router, prefix="/context-sources")
+    app.include_router(credentials_router, prefix="/credentials")
 
     return app
 

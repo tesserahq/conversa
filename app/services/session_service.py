@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy.orm import Session as DBSession
+from sqlalchemy.orm import Query, Session as DBSession
 
 from app.models.session import Session
 from app.schemas.session import SessionCreate, SessionUpdate
@@ -77,3 +77,8 @@ class SessionService(SoftDeleteService[Session]):
         query = self.db.query(Session)
         query = apply_filters(query, Session, filters)
         return query.all()
+
+    def search_query(self, filters: Dict[str, Any]) -> Query[Session]:
+        """Get a query for sessions with filters (for pagination)."""
+        query = self.db.query(Session)
+        return apply_filters(query, Session, filters)

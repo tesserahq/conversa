@@ -3,7 +3,6 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Request
 
 from app.auth.rbac import build_rbac_dependencies
-from app.routers.system_prompts_router import router as system_prompts_router
 from app.schemas.system import (
     GeneralGroup,
     SystemSettingsGrouped,
@@ -32,8 +31,6 @@ rbac = build_rbac_dependencies(
     resource=RESOURCE_SETTINGS,
     domain_resolver=infer_domain,
 )
-
-router.include_router(system_prompts_router)
 
 
 @router.get("/settings", response_model=SystemSettingsGrouped)
