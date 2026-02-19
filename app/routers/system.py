@@ -1,5 +1,8 @@
 from typing import Optional
+
 from fastapi import APIRouter, Depends, Request
+
+from app.auth.rbac import build_rbac_dependencies
 from app.schemas.system import (
     GeneralGroup,
     SystemSettingsGrouped,
@@ -9,9 +12,8 @@ from app.schemas.system import (
     RedisGroup,
     ExternalServicesGroup,
 )
-from tessera_sdk.utils.auth import get_current_user
 from app.config import get_settings
-from app.auth.rbac import build_rbac_dependencies
+from tessera_sdk.utils.auth import get_current_user
 
 router = APIRouter(
     prefix="/system",
@@ -24,9 +26,9 @@ async def infer_domain(request: Request) -> Optional[str]:
     return "*"
 
 
-RESOURCE = "system.settings"
+RESOURCE_SETTINGS = "system.settings"
 rbac = build_rbac_dependencies(
-    resource=RESOURCE,
+    resource=RESOURCE_SETTINGS,
     domain_resolver=infer_domain,
 )
 

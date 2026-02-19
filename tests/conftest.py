@@ -1,3 +1,9 @@
+import os
+
+# Set credential key for tests before any app import (fallback when .env not loaded)
+if "CREDENTIAL_MASTER_KEY" not in os.environ and "FERNET_KEY" not in os.environ:
+    os.environ["CREDENTIAL_MASTER_KEY"] = "RrAy78H8PevHw9EJ3a0OZgrHp8RABeXRQQGajzO5NQc="
+
 from app.config import get_settings
 import pytest
 import logging
@@ -38,6 +44,9 @@ from app.main import create_app
 
 pytest_plugins = [
     "tests.fixtures.user_fixtures",
+    "tests.fixtures.system_prompt_fixtures",
+    "tests.fixtures.credential_fixtures",
+    "tests.fixtures.context_source_fixtures",
 ]
 
 logger = logging.getLogger(__name__)
@@ -183,8 +192,9 @@ def create_client_fixture(user_fixture_name):
         app.dependency_overrides[get_db] = override_get_db
         app.dependency_overrides[get_current_user] = override_get_current_user
 
-        # Create test client with auth headers
-        test_client = TestClient(app)
+        # Create test client with auth headers (raise_server_exceptions=False so
+        # we can assert on 500 responses instead of exceptions being re-raised)
+        test_client = TestClient(app, raise_server_exceptions=False)
 
         # Add default authorization header to all requests
         test_client.headers.update({"Authorization": "Bearer mock_token"})
