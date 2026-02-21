@@ -94,3 +94,30 @@ def test_apply_credentials_bearer(db, setup_user):
     cred = svc.create_credential(data, created_by_id=None)
     headers = svc.apply_credentials(cred.id)
     assert headers["Authorization"] == "Bearer my-secret-token"
+
+
+def test_apply_credentials_default_m2m_when_credential_id_none(db):
+    """apply_credentials with credential_id=None uses default M2M via provider."""
+    svc = CredentialService(db, m2m_token_provider=lambda: "m2m-token-xyz")
+    headers = svc.apply_credentials(credential_id=None)
+    assert headers["Authorization"] == "Bearer m2m-token-xyz"
+
+
+def test_apply_credentials_m2m_identies_uses_provider(db, setup_user):
+    """apply_credentials for M2M_IDENTIES uses default M2M token from provider."""
+    svc = CredentialService(db, m2m_token_provider=lambda: "m2m-identies-token")
+    data = CredentialCreate(
+        name="m2m-test",
+        type=CredentialType.M2M_IDENTIES,
+        fields={},
+    )
+    cred = svc.create_credential(data, created_by_id=setup_user.id)
+    headers = svc.apply_credentials(cred.id)
+    assert headers["Authorization"] == "Bearer m2m-identies-token"
+
+
+def test_apply_credentials_default_m2m_raises_when_provider_returns_none(db):
+    """apply_credentials with credential_id=None raises when provider returns None."""
+    svc = CredentialService(db, m2m_token_provider=lambda: None)
+    with pytest.raises(ValueError, match="Default M2M auth requires an M2M token"):
+        svc.apply_credentials(credential_id=None)

@@ -1,5 +1,7 @@
 # pyright: reportMissingTypeStubs=false
 from celery import Celery
+from celery.schedules import schedule
+
 from app.config import get_settings
 
 settings = get_settings()
@@ -23,6 +25,14 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
 )
+
+# Beat schedule for context sync
+celery_app.conf.beat_schedule = {
+    "sync-context-all-due": {
+        "task": "app.tasks.context_sync_task.sync_context_all_due_task",
+        "schedule": schedule(run_every=settings.context_sync_interval_seconds),
+    },
+}
 
 celery_app.autodiscover_tasks(["app.tasks"])  # ensure tasks are registered explicitly
 

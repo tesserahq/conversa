@@ -113,14 +113,8 @@ def upgrade() -> None:
     op.create_index(
         "ix_context_sources_source_id",
         "context_sources",
-        ["source_id"],
+        ["source_id", "deleted_at"],
         unique=True,
-    )
-    op.create_index(
-        "ix_context_sources_deleted_at",
-        "context_sources",
-        ["deleted_at"],
-        unique=False,
     )
 
     # context_source_state

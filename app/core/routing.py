@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 
 from app.channels.envelope import InboundMessage, OutboundMessage
 from app.core.linker import Linker
+from app.services.context_snapshot_service import ContextSnapshotService
+from app.utils.metrics import CONTEXT_SNAPSHOT_AGE_SECONDS
 from app.services.session_manager import SessionManager
-from app.workers.llm import LLMRunner, build_llm_runner_from_env
+from app.tasks.context_sync_task import sync_context_for_user_task
 from app.utils.db.db_session_helper import db_session
+from app.workers.llm import LLMRunner, build_llm_runner_from_env
 
 LINK_URL = "https://app.mylinden.family/link/{link_token}"
 
@@ -33,7 +37,23 @@ class Router:
             session_manager = SessionManager(db)
             session = session_manager.get_or_create_session(msg, user_id)
             history = session_manager.get_history_for_llm(session.id, limit=50)
-            reply_text = await self._llm.run(msg, history=history)
+
+            context = None
+            if session.user_id:
+                snapshot_svc = ContextSnapshotService(db)
+                snapshot = snapshot_svc.get_latest_snapshot(session.user_id)
+                if snapshot:
+                    context = snapshot.payload
+                    age_seconds = (
+                        datetime.now(timezone.utc) - snapshot.generated_at
+                    ).total_seconds()
+                    CONTEXT_SNAPSHOT_AGE_SECONDS.labels(
+                        user_id=str(session.user_id)
+                    ).set(age_seconds)
+                else:
+                    sync_context_for_user_task.delay(str(session.user_id))
+
+            reply_text = await self._llm.run(msg, history=history, context=context)
             outbound = OutboundMessage(
                 channel=msg.channel,
                 account_id=msg.account_id,
