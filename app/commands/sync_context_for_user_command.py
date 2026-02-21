@@ -26,13 +26,8 @@ class SyncContextForUserCommand:
     merge them, and store the snapshot.
     """
 
-    def __init__(
-        self,
-        db: Session,
-        m2m_token: Optional[str] = None,
-    ) -> None:
+    def __init__(self, db: Session) -> None:
         self.db = db
-        self.m2m_token = m2m_token
         self.logger = logging.getLogger(__name__)
 
     def execute(self, user_id: UUID) -> Optional[UUID]:
@@ -51,10 +46,7 @@ class SyncContextForUserCommand:
         state_svc = ContextSourceStateService(
             self.db, context_source_service=source_svc
         )
-        fetcher = ContextPackFetcher(
-            CredentialService(self.db),
-            m2m_token=self.m2m_token,
-        )
+        fetcher = ContextPackFetcher(CredentialService(self.db))
         merge_svc = ContextMergeService()
         snapshot_svc = ContextSnapshotService(self.db)
 

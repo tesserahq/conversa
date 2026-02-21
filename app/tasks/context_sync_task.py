@@ -9,17 +9,8 @@ from app.services.context_source_state_service import ContextSourceStateService
 from app.infra.celery_app import celery_app
 from app.infra.logging_config import get_logger
 from app.utils.db.db_session_helper import db_session
-from tessera_sdk.utils.m2m_token import M2MTokenClient
 
 logger = get_logger("context_sync")
-
-
-def _get_m2m_token() -> str | None:
-    """Get M2M token for source auth. Returns None if unavailable."""
-    try:
-        return M2MTokenClient().get_token_sync().access_token
-    except Exception:
-        return None
 
 
 @celery_app.task(name="app.tasks.context_sync_task.sync_context_for_user_task")
@@ -33,9 +24,8 @@ def sync_context_for_user_task(user_id_str: str) -> str | None:
         logger.warning("Invalid user_id for context sync: %s", user_id_str)
         return None
 
-    m2m_token = _get_m2m_token()
     with db_session() as db:
-        command = SyncContextForUserCommand(db, m2m_token=m2m_token)
+        command = SyncContextForUserCommand(db)
         result = command.execute(user_id)
 
     return str(result) if result is not None else user_id_str

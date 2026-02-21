@@ -60,14 +60,7 @@ def trigger_context_sync(
     db: Session = Depends(get_db),
 ) -> ContextSyncResponse:
     """Manually trigger context sync for a user. Fetches from all enabled sources, merges, and stores snapshot."""
-    try:
-        from tessera_sdk.utils.m2m_token import M2MTokenClient
-
-        m2m_token = M2MTokenClient().get_token_sync().access_token
-    except Exception:
-        m2m_token = None
-
-    command = SyncContextForUserCommand(db, m2m_token=m2m_token)
+    command = SyncContextForUserCommand(db)
     result = command.execute(user_id)
     logger.info("Context sync result: %s", result)
     if result is None:

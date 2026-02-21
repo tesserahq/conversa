@@ -9,7 +9,6 @@ from uuid import UUID
 import requests
 from pydantic import ValidationError
 
-from app.constants.credentials import CredentialType
 from app.models.context_source import ContextSource
 from app.models.context_source import ContextSourceState
 from app.schemas.context_pack import ContextPackResponse, MergeableContextPack
@@ -37,13 +36,8 @@ class FetchResult:
 class ContextPackFetcher:
     """Fetches context packs from a registered source."""
 
-    def __init__(
-        self,
-        credential_service: CredentialService,
-        m2m_token: Optional[str] = None,
-    ) -> None:
+    def __init__(self, credential_service: CredentialService) -> None:
         self._credential_service = credential_service
-        self._m2m_token = m2m_token
 
     def fetch(
         self,
@@ -63,25 +57,13 @@ class ContextPackFetcher:
             params["since"] = state.since_cursor
 
         headers: dict[str, str] = {"Accept": "application/json"}
-        if source.credential_id:
-            cred_type = None
-            try:
-                cred = self._credential_service.get_credential(source.credential_id)
-                if cred:
-                    cred_type = CredentialType(cred.type)
-            except (ValueError, KeyError):
-                pass
-            access_token = (
-                self._m2m_token if cred_type == CredentialType.M2M_IDENTIES else None
+        try:
+            headers = self._credential_service.apply_credentials(
+                credential_id=source.credential_id,
+                headers=headers,
             )
-            try:
-                headers = self._credential_service.apply_credentials(
-                    source.credential_id,
-                    headers=headers,
-                    access_token=access_token,
-                )
-            except ValueError as e:
-                return FetchResult(error=str(e))
+        except ValueError as e:
+            return FetchResult(error=str(e))
 
         if state and state.etag:
             headers["If-None-Match"] = state.etag
