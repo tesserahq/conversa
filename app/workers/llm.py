@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import date
+import json
+from datetime import date, datetime
 from typing import Any, List, Optional
 
 from pydantic_ai import Agent
@@ -13,7 +14,6 @@ from app.infra.logging_config import get_logger
 from app.utils.db.db_session_helper import db_session
 from app.services.system_prompt_service import SystemPromptService
 from app.constants.default_system_prompt import DefaultSystemPrompt
-from datetime import datetime
 from pydantic_ai.messages import (
     ModelRequest,
     SystemPromptPart,
@@ -61,15 +61,35 @@ def _history_to_message_list(history: List[dict[str, str]]) -> List[Any]:
     return out
 
 
+def _format_context_for_prompt(context: dict[str, Any]) -> str:
+    """Format context snapshot for injection into system prompt."""
+    parts = []
+    if context.get("facts"):
+        parts.append("Facts: " + json.dumps(context["facts"], default=str))
+    if context.get("recents"):
+        parts.append("Recents: " + json.dumps(context["recents"], default=str))
+    if context.get("pointers"):
+        parts.append("Pointers: " + json.dumps(context["pointers"], default=str))
+    if not parts:
+        return ""
+    return "\n\nUser context (use when relevant):\n" + "\n".join(parts)
+
+
 def _message_list_with_system_prompt(
     system_prompt: str,
     history: List[dict[str, str]],
+    context: Optional[dict[str, Any]] = None,
 ) -> List[Any]:
     """Build message_history with system prompt always first, then conversation history."""
 
     # https://github.com/pydantic/pydantic-ai/issues/4039
     # https://ai.pydantic.dev/agent/#system-prompts
-    system_message = ModelRequest(parts=[SystemPromptPart(content=system_prompt)])
+    full_prompt = system_prompt
+    if context:
+        ctx_block = _format_context_for_prompt(context)
+        if ctx_block:
+            full_prompt = system_prompt.rstrip() + ctx_block
+    system_message = ModelRequest(parts=[SystemPromptPart(content=full_prompt)])
     rest = _history_to_message_list(history)
     return [system_message] + rest
 
@@ -95,11 +115,13 @@ class LLMRunner:
         self,
         msg: InboundMessage,
         history: Optional[List[dict[str, str]]] = None,
+        context: Optional[dict[str, Any]] = None,
     ) -> str:
         prompt = msg.text or ""
         message_history = _message_list_with_system_prompt(
             self._system_prompt,
             history or [],
+            context=context,
         )
         result = await self._agent.run(
             prompt,

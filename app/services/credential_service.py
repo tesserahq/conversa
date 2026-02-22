@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Query, Session
@@ -19,11 +19,27 @@ from app.services.soft_delete_service import SoftDeleteService
 from app.utils.db.filtering import apply_filters
 
 
+def _get_default_m2m_token() -> Optional[str]:
+    """Fetch default M2M token from Tessera SDK. Returns None if unavailable."""
+    try:
+        from tessera_sdk.utils.m2m_token import M2MTokenClient
+
+        return M2MTokenClient().get_token_sync().access_token
+    except Exception:
+        return None
+
+
 class CredentialService(SoftDeleteService[Credential]):
     """Manages credentials for context source auth."""
 
-    def __init__(self, db: Session) -> None:
+    def __init__(
+        self,
+        db: Session,
+        *,
+        m2m_token_provider: Optional[Callable[[], Optional[str]]] = None,
+    ) -> None:
         super().__init__(db, Credential)
+        self._m2m_token_provider = m2m_token_provider or _get_default_m2m_token
 
     def get_credential(self, credential_id: UUID) -> Optional[Credential]:
         """Fetch a credential by ID."""
@@ -109,18 +125,29 @@ class CredentialService(SoftDeleteService[Credential]):
 
     def apply_credentials(
         self,
-        credential_id: UUID,
+        credential_id: Optional[UUID] = None,
         headers: Optional[Dict[str, str]] = None,
-        access_token: Optional[str] = None,
     ) -> Dict[str, str]:
-        """Apply credential to headers for HTTP requests. Used by sync worker."""
+        """
+        Apply credential to headers for HTTP requests. Used by sync worker.
+
+        When credential_id is None, uses default M2M auth. Otherwise applies
+        the credential by type; for M2M_IDENTIES, uses the default M2M token.
+        """
+        result = dict(headers) if headers else {}
+
+        if credential_id is None:
+            token = self._m2m_token_provider()
+            if not token:
+                raise ValueError("Default M2M auth requires an M2M token")
+            result["Authorization"] = f"Bearer {token}"
+            return result
+
         credential = self.get_credential(credential_id)
         if not credential:
             raise ValueError(f"Credential {credential_id} not found")
 
         fields = self.get_credential_fields(credential_id) or {}
-        result = dict(headers) if headers else {}
-
         cred_type = CredentialType(credential.type)
 
         if cred_type == CredentialType.BEARER_AUTH:
@@ -149,8 +176,9 @@ class CredentialService(SoftDeleteService[Credential]):
             result[header_name] = api_key
 
         elif cred_type == CredentialType.M2M_IDENTIES:
-            if not access_token:
-                raise ValueError("M2M Identies auth requires an access token")
-            result["Authorization"] = f"Bearer {access_token}"
+            token = self._m2m_token_provider()
+            if not token:
+                raise ValueError("M2M Identies auth requires an M2M token")
+            result["Authorization"] = f"Bearer {token}"
 
         return result
