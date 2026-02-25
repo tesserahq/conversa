@@ -77,13 +77,6 @@ class Settings(BaseSettings):
     service_account_client_secret: str = Field(
         default="", json_schema_extra={"env": "SERVICE_ACCOUNT_CLIENT_SECRET"}
     )
-    quore_enabled: bool = Field(
-        default=False, json_schema_extra={"env": "QUORE_ENABLED"}
-    )
-    quore_api_url: str = Field(
-        default="https://quore-api.meetconversa.com",
-        json_schema_extra={"env": "QUORE_API_URL"},
-    )
     nats_enabled: bool = Field(default=False, json_schema_extra={"env": "NATS_ENABLED"})
     nats_url: Optional[str] = Field(default=None, json_schema_extra={"env": "NATS_URL"})
     nats_queue: Optional[str] = Field(
