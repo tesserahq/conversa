@@ -15,7 +15,7 @@ from app.services.credential_service import CredentialService
 from tessera_sdk.utils.auth import get_current_user
 
 router = APIRouter(
-    prefix="",
+    prefix="/credentials",
     tags=["credentials"],
     responses={404: {"description": "Not found"}},
 )

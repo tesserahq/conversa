@@ -27,7 +27,7 @@ from app.infra.logging_config import get_logger
 logger = get_logger("context_sources")
 
 router = APIRouter(
-    prefix="",
+    prefix="/context-sources",
     tags=["context-sources"],
     responses={404: {"description": "Not found"}},
 )

@@ -21,7 +21,7 @@ from app.services.system_prompt_service import SystemPromptService
 from tessera_sdk.utils.auth import get_current_user
 
 router = APIRouter(
-    prefix="/prompts",
+    prefix="/system-prompts",
     tags=["system-prompts"],
     responses={404: {"description": "Not found"}},
 )
