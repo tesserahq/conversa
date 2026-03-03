@@ -8,6 +8,11 @@ from fastapi_pagination.ext.sqlalchemy import paginate
 from sqlalchemy.orm import Session
 
 from app.auth.rbac import build_rbac_dependencies
+from app.commands.system_prompts import (
+    CreateSystemPromptCommand,
+    DeleteSystemPromptCommand,
+    UpdateSystemPromptCommand,
+)
 from app.db import get_db
 from app.schemas.system_prompt import (
     SystemPromptCreate,
@@ -66,11 +71,10 @@ def create_system_prompt(
     db: Session = Depends(get_db),
 ) -> SystemPromptRead:
     """Create a new system prompt with optional initial content."""
-    svc = SystemPromptService(db)
-    prompt = svc.create_prompt(
-        name=data.name,
-        initial_content=data.content,
-        note=data.note,
+    command = CreateSystemPromptCommand(db)
+    prompt = command.execute(
+        data,
+        created_by_id=getattr(_current_user, "id", None),
     )
     return prompt
 
@@ -105,8 +109,12 @@ def update_system_prompt(
     db: Session = Depends(get_db),
 ) -> SystemPromptRead:
     """Update a system prompt (e.g. rename)."""
-    svc = SystemPromptService(db)
-    prompt = svc.update_prompt_name(name, new_name=data.name)
+    command = UpdateSystemPromptCommand(db)
+    prompt = command.execute(
+        name,
+        data,
+        updated_by_id=getattr(_current_user, "id", None),
+    )
     if prompt is None:
         raise HTTPException(status_code=404, detail="System prompt not found")
     return prompt
@@ -123,8 +131,11 @@ def delete_system_prompt(
     db: Session = Depends(get_db),
 ) -> None:
     """Delete a system prompt and all its versions."""
-    svc = SystemPromptService(db)
-    if not svc.delete_prompt(name):
+    command = DeleteSystemPromptCommand(db)
+    if not command.execute(
+        name,
+        deleted_by_id=getattr(_current_user, "id", None),
+    ):
         raise HTTPException(status_code=404, detail="System prompt not found")
 
 

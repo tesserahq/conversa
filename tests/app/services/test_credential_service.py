@@ -121,3 +121,88 @@ def test_apply_credentials_default_m2m_raises_when_provider_returns_none(db):
     svc = CredentialService(db, m2m_token_provider=lambda: None)
     with pytest.raises(ValueError, match="Default M2M auth requires an M2M token"):
         svc.apply_credentials(credential_id=None)
+
+
+class _FakeDelegatedTokenService:
+    def __init__(self) -> None:
+        self.calls: list[dict] = []
+
+    def get_access_token(self, **kwargs):
+        self.calls.append(kwargs)
+        return "delegated-token-123"
+
+
+def test_apply_credentials_with_context_with_none_credential_adds_no_auth(db):
+    """MCP credential application keeps headers unchanged when credential_id is None."""
+    svc = CredentialService(db, m2m_token_provider=lambda: "unused")
+    headers = svc.apply_credentials_with_context(
+        credential_id=None,
+        headers={"X-Request-Id": "abc"},
+    )
+    assert headers == {"X-Request-Id": "abc"}
+
+
+def test_apply_credentials_with_context_with_bearer_credential(db, setup_user):
+    """MCP credential application supports static bearer credentials."""
+    svc = CredentialService(db)
+    credential = svc.create_credential(
+        CredentialCreate(
+            name="mcp-bearer",
+            type=CredentialType.BEARER_AUTH,
+            fields={"token": "mcp-token"},
+        ),
+        created_by_id=setup_user.id,
+    )
+    headers = svc.apply_credentials_with_context(credential_id=credential.id)
+    assert headers["Authorization"] == "Bearer mcp-token"
+
+
+def test_apply_credentials_with_context_delegated_exchange(db, setup_user):
+    """Delegated exchange credentials call delegated token provider with user context."""
+    delegated = _FakeDelegatedTokenService()
+    svc = CredentialService(
+        db,
+        delegated_token_service=delegated,
+        m2m_token_provider=lambda: "unused",
+    )
+    credential = svc.create_credential(
+        CredentialCreate(
+            name="delegated",
+            type=CredentialType.DELEGATED_IDENTIES_EXCHANGE,
+            fields={"audience": "linden", "scopes": ["mcp:tools:execute"]},
+        ),
+        created_by_id=setup_user.id,
+    )
+
+    headers = svc.apply_credentials_with_context(
+        credential_id=credential.id,
+        user_id=setup_user.id,
+        context={"channel": "telegram"},
+    )
+
+    assert headers["Authorization"] == "Bearer delegated-token-123"
+    assert len(delegated.calls) == 1
+    assert delegated.calls[0]["audience"] == "linden"
+    assert delegated.calls[0]["scopes"] == ["mcp:tools:execute"]
+
+
+def test_apply_credentials_with_context_delegated_requires_user_id(db, setup_user):
+    """Delegated exchange credentials require user_id in request context."""
+    svc = CredentialService(
+        db,
+        delegated_token_service=_FakeDelegatedTokenService(),
+        m2m_token_provider=lambda: "unused",
+    )
+    credential = svc.create_credential(
+        CredentialCreate(
+            name="delegated-no-user",
+            type=CredentialType.DELEGATED_IDENTIES_EXCHANGE,
+            fields={"audience": "linden", "scopes": "mcp:tools:execute"},
+        ),
+        created_by_id=setup_user.id,
+    )
+
+    with pytest.raises(
+        ValueError, match="Delegated Identies exchange requires user_id"
+    ):
+        svc.apply_credentials_with_context(credential_id=credential.id)

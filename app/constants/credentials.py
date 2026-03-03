@@ -10,3 +10,4 @@ class CredentialType(StrEnum):
     BASIC_AUTH = "basic_auth"
     API_KEY = "api_key"
     M2M_IDENTIES = "m2m_identies"
+    DELEGATED_IDENTIES_EXCHANGE = "delegated_identies_exchange"

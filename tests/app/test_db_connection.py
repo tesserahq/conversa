@@ -1,6 +1,7 @@
 import pytest
 from sqlalchemy import text
-from app.db import engine, SessionLocal
+
+from app.db import SessionLocal, engine
 
 
 def test_database_connection():

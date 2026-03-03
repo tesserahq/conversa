@@ -10,6 +10,11 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.auth.rbac import build_rbac_dependencies
+from app.commands.context_sources import (
+    CreateContextSourceCommand,
+    DeleteContextSourceCommand,
+    UpdateContextSourceCommand,
+)
 from app.commands.sync_context_for_user_command import SyncContextForUserCommand
 from app.db import get_db
 from app.models.context_source import ContextSource
@@ -92,8 +97,11 @@ def create_context_source(
     db: Session = Depends(get_db),
 ) -> ContextSourceRead:
     """Create a new context source."""
-    svc = ContextSourceService(db)
-    source = svc.create_context_source(data)
+    command = CreateContextSourceCommand(db)
+    source = command.execute(
+        data,
+        created_by_id=getattr(_current_user, "id", None),
+    )
     return source
 
 
@@ -116,7 +124,15 @@ def update_context_source(
     db: Session = Depends(get_db),
 ) -> ContextSourceRead:
     """Update a context source."""
-    return ContextSourceService(db).update_context_source(source.id, data)
+    command = UpdateContextSourceCommand(db)
+    updated = command.execute(
+        source.id,
+        data,
+        updated_by_id=getattr(_current_user, "id", None),
+    )
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Context source not found")
+    return updated
 
 
 @router.delete("/{id}", status_code=204)
@@ -127,4 +143,9 @@ def delete_context_source(
     db: Session = Depends(get_db),
 ) -> None:
     """Soft delete a context source."""
-    ContextSourceService(db).delete_context_source(source.id)
+    command = DeleteContextSourceCommand(db)
+    if not command.execute(
+        source.id,
+        deleted_by_id=getattr(_current_user, "id", None),
+    ):
+        raise HTTPException(status_code=404, detail="Context source not found")
