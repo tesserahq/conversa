@@ -108,3 +108,10 @@ class MCPServerRead(BaseModel):
     extended_info: dict[str, Any] | None
     created_at: datetime
     updated_at: datetime
+
+
+class MCPToolsRefreshResponse(BaseModel):
+    """Response schema for POST /mcp-servers/{id}/refresh-tools."""
+
+    server_id: str
+    tools_count: int

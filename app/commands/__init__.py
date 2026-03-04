@@ -9,6 +9,7 @@ from app.commands.credentials import CreateCredentialCommand
 from app.commands.mcp_servers import (
     CreateMcpServerCommand,
     DeleteMcpServerCommand,
+    RefreshMcpServerToolsCommand,
     UpdateMcpServerCommand,
 )
 from app.commands.system_prompts import (
@@ -26,6 +27,7 @@ __all__ = [
     "DeleteContextSourceCommand",
     "DeleteMcpServerCommand",
     "DeleteSystemPromptCommand",
+    "RefreshMcpServerToolsCommand",
     "SyncContextForUserCommand",
     "UpdateContextSourceCommand",
     "UpdateMcpServerCommand",
