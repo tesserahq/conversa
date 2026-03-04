@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.mcp.catalog import ToolCatalog, get_tool_catalog
+from app.mcp.catalog import ToolCatalog
 from app.schemas.mcp_tool import build_qualified_name
 
 
@@ -14,9 +14,9 @@ def test_build_qualified_name():
     assert build_qualified_name("my-server", "tool_a") == "my-server__tool_a"
 
 
-def test_get_tool_catalog_returns_tool_catalog_instance():
-    """get_tool_catalog() returns a ToolCatalog with default cache."""
-    catalog = get_tool_catalog()
+def test_tool_catalog_new_returns_tool_catalog_instance():
+    """ToolCatalog.new() returns a ToolCatalog with default cache."""
+    catalog = ToolCatalog.new()
     assert isinstance(catalog, ToolCatalog)
 
 

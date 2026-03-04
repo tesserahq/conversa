@@ -9,6 +9,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.events.mcp_server_events import build_mcp_server_deleted_event
+from app.mcp.catalog import ToolCatalog
 from app.models.mcp_server import MCPServer
 from app.services.mcp_server_service import MCPServerService
 from tessera_sdk.events.nats_router import NatsEventPublisher  # type: ignore[import-untyped]
@@ -53,6 +54,7 @@ class DeleteMcpServerCommand:
         ok = self.mcp_server_service.delete_mcp_server(mcp_server_id)
         if ok:
             self._publish_mcp_server_deleted_event(mcp_server, deleted_by_id)
+            ToolCatalog.new().invalidate(mcp_server.server_id)
         return ok
 
     def _publish_mcp_server_deleted_event(

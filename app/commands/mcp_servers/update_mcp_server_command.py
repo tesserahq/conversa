@@ -9,6 +9,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.events.mcp_server_events import build_mcp_server_updated_event
+from app.mcp.catalog import ToolCatalog
 from app.models.mcp_server import MCPServer
 from app.schemas.mcp_server import MCPServerUpdate
 from app.services.mcp_server_service import MCPServerService
@@ -55,6 +56,7 @@ class UpdateMcpServerCommand:
         mcp_server = self.mcp_server_service.update_mcp_server(mcp_server_id, data)
         if mcp_server is not None:
             self._publish_mcp_server_updated_event(mcp_server, updated_by_id)
+            ToolCatalog.new().invalidate(mcp_server.server_id)
         return mcp_server
 
     def _publish_mcp_server_updated_event(

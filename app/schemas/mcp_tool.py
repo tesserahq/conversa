@@ -16,7 +16,9 @@ class MCPCatalogTool(BaseModel):
     """Normalized representation of an MCP tool for catalog and LLM adapter."""
 
     qualified_name: str = Field(..., description="Prefixed name e.g. linden__tool_name")
-    original_name: str = Field(..., description="Tool name as returned by the MCP server")
+    original_name: str = Field(
+        ..., description="Tool name as returned by the MCP server"
+    )
     description: str | None = Field(None, description="Tool description")
     input_schema: dict[str, Any] = Field(default_factory=dict)
     server_id: str = Field(..., description="MCP server_id from registry")

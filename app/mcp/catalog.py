@@ -41,21 +41,18 @@ def _cache_key(server_id: str) -> str:
     return f"{CACHE_KEY_PREFIX}{server_id}"
 
 
-def get_tool_catalog(
-    *,
-    cache: Cache | None = None,
-) -> "ToolCatalog":
-    """Return a ToolCatalog instance. Uses shared cache if not provided."""
-    if cache is None:
-        cache = Cache(namespace=TOOL_CATALOG_NAMESPACE)
-    return ToolCatalog(cache=cache)
-
-
 class ToolCatalog:
     """Fetches and caches MCP tools; normalizes to MCPCatalogTool. No DB dependency."""
 
     def __init__(self, *, cache: Cache) -> None:
         self._cache = cache
+
+    @classmethod
+    def new(cls, *, cache: Cache | None = None) -> ToolCatalog:
+        """Create a ToolCatalog instance. Uses default cache if not provided."""
+        if cache is None:
+            cache = Cache(namespace=TOOL_CATALOG_NAMESPACE)
+        return cls(cache=cache)
 
     def invalidate(self, server_id: str) -> None:
         """Remove cached tools for the given server (e.g. after config change)."""
@@ -86,9 +83,7 @@ class ToolCatalog:
         async with client_context(mcp_server.url, headers) as client:
             tools = await client.list_tools()
 
-        catalog_tools = [
-            _tool_to_catalog_tool(t, server_id, prefix) for t in tools
-        ]
+        catalog_tools = [_tool_to_catalog_tool(t, server_id, prefix) for t in tools]
         payload = [t.model_dump(mode="json") for t in catalog_tools]
         self._cache.write(key, payload, ttl=ttl)
         return catalog_tools
