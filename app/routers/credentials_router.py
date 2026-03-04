@@ -9,8 +9,15 @@ from fastapi_pagination.ext.sqlalchemy import paginate
 from sqlalchemy.orm import Session
 
 from app.auth.rbac import build_rbac_dependencies
+from app.commands.credentials import CreateCredentialCommand
+from app.core.credentials import credential_registry
 from app.db import get_db
-from app.schemas.credential import CredentialCreate, CredentialRead, CredentialUpdate
+from app.schemas.credential import (
+    CredentialCreate,
+    CredentialRead,
+    CredentialTypeInfo,
+    CredentialUpdate,
+)
 from app.services.credential_service import CredentialService
 from tessera_sdk.utils.auth import get_current_user
 
@@ -30,6 +37,15 @@ rbac = build_rbac_dependencies(
     resource=RESOURCE_CREDENTIALS,
     domain_resolver=infer_domain,
 )
+
+
+@router.get("/types", response_model=list[CredentialTypeInfo])
+def list_credential_types(
+    _authorized: bool = Depends(rbac["read"]),
+    _current_user=Depends(get_current_user),
+) -> list[CredentialTypeInfo]:
+    """List available credential types and their attributes for UI rendering."""
+    return list(credential_registry.values())
 
 
 @router.get("", response_model=Page[CredentialRead])
@@ -53,8 +69,8 @@ def create_credential(
     db: Session = Depends(get_db),
 ) -> CredentialRead:
     """Create a new credential."""
-    svc = CredentialService(db)
-    credential = svc.create_credential(
+    command = CreateCredentialCommand(db)
+    credential = command.execute(
         data,
         created_by_id=getattr(_current_user, "id", None),
     )

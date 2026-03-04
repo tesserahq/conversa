@@ -55,13 +55,23 @@ class M2mIdentiesModel(BaseModel):
     pass
 
 
+class DelegatedIdentiesExchangeModel(BaseModel):
+    """Delegated Identies exchange auth fields."""
+
+    audience: str
+    scopes: list[str] | str
+
+
 class CredentialCreate(BaseModel):
     """Request schema for creating a credential."""
 
     name: str = Field(..., min_length=1, max_length=100)
     type: str = Field(
         ...,
-        description="Credential type (bearer_auth, basic_auth, api_key, m2m_identies)",
+        description=(
+            "Credential type (bearer_auth, basic_auth, api_key, m2m_identies, "
+            "delegated_identies_exchange)"
+        ),
     )
     fields: dict[str, Any] = Field(default_factory=dict)
 

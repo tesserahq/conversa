@@ -6,7 +6,7 @@ import json
 from typing import Any, Dict, Type
 
 from cryptography.fernet import Fernet
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from app.constants.credentials import CredentialType
 from app.schemas.credential import (
@@ -15,6 +15,7 @@ from app.schemas.credential import (
     BearerAuthModel,
     CredentialField,
     CredentialTypeInfo,
+    DelegatedIdentiesExchangeModel,
     M2mIdentiesModel,
 )
 from app.config import get_settings
@@ -91,6 +92,25 @@ api_key_fields = [
     ),
 ]
 
+delegated_identies_exchange_fields = [
+    CredentialField(
+        name="audience",
+        label="Audience",
+        type="string",
+        input_type="text",
+        help="Target audience for delegated token exchange",
+        required=True,
+    ),
+    CredentialField(
+        name="scopes",
+        label="Scopes",
+        type="array",
+        input_type="text",
+        help="Requested scopes for delegated token exchange",
+        required=True,
+    ),
+]
+
 credential_registry: Dict[CredentialType, CredentialTypeInfo] = {
     CredentialType.BEARER_AUTH: CredentialTypeInfo(
         type_name=CredentialType.BEARER_AUTH,
@@ -112,6 +132,11 @@ credential_registry: Dict[CredentialType, CredentialTypeInfo] = {
         display_name="M2M Identies",
         fields=[],
     ),
+    CredentialType.DELEGATED_IDENTIES_EXCHANGE: CredentialTypeInfo(
+        type_name=CredentialType.DELEGATED_IDENTIES_EXCHANGE,
+        display_name="Delegated Identies Exchange",
+        fields=delegated_identies_exchange_fields,
+    ),
 }
 
 credential_models: Dict[CredentialType, Type[BaseModel]] = {
@@ -119,6 +144,7 @@ credential_models: Dict[CredentialType, Type[BaseModel]] = {
     CredentialType.BASIC_AUTH: BasicAuthModel,
     CredentialType.API_KEY: ApiKeyModel,
     CredentialType.M2M_IDENTIES: M2mIdentiesModel,
+    CredentialType.DELEGATED_IDENTIES_EXCHANGE: DelegatedIdentiesExchangeModel,
 }
 
 
@@ -145,8 +171,8 @@ def validate_credential_fields(type_name: str, fields: Dict[str, Any]) -> None:
     model = credential_models[cred_type]
     try:
         model(**fields)
-    except Exception as e:
-        raise ValueError(f"Invalid credential fields: {str(e)}") from e
+    except ValidationError as e:
+        raise ValueError("Invalid credential fields") from e
 
 
 def encrypt_credential_fields(fields: Dict[str, Any]) -> bytes:

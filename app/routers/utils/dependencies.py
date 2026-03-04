@@ -5,8 +5,10 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models.context_source import ContextSource
+from app.models.mcp_server import MCPServer
 from app.models.user import User
 from app.services.context_source_service import ContextSourceService
+from app.services.mcp_server_service import MCPServerService
 from app.services.user_service import UserService
 
 
@@ -30,3 +32,14 @@ def get_context_source_by_id(
     if source is None:
         raise HTTPException(status_code=404, detail="Context source not found")
     return source
+
+
+def get_mcp_server_by_id(
+    id: UUID,
+    db: Session = Depends(get_db),
+) -> MCPServer:
+    """FastAPI dependency to get an MCP server by ID."""
+    mcp_server = MCPServerService(db).get_mcp_server(id)
+    if mcp_server is None:
+        raise HTTPException(status_code=404, detail="MCP server not found")
+    return mcp_server

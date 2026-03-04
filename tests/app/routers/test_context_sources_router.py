@@ -44,7 +44,7 @@ def test_create_context_source_duplicate_source_id(client, setup_context_source)
         "base_url": "https://other.example.com",
     }
     r = client.post("/context-sources", json=payload)
-    assert r.status_code == 500
+    assert r.status_code == 422
 
 
 def test_get_context_source_by_id(client, setup_context_source):

@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
 from app.routers.context_sources_router import router as context_sources_router
 from app.routers.credentials_router import router as credentials_router
+from app.routers.mcp_servers_router import router as mcp_servers_router
 from app.routers.sessions_router import sessions_router
 from app.routers.system import router as system_router
 from app.routers.system_prompts_router import router as system_prompts_router
@@ -125,6 +126,7 @@ def create_app(testing: bool = False, auth_middleware=None) -> FastAPI:
     app.include_router(system_prompts_router)
     app.include_router(context_sources_router)
     app.include_router(credentials_router)
+    app.include_router(mcp_servers_router)
 
     return app
 
