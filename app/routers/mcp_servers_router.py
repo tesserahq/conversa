@@ -15,9 +15,16 @@ from app.commands.mcp_servers import (
     UpdateMcpServerCommand,
 )
 from app.db import get_db
+from app.mcp.catalog import get_tool_catalog
 from app.models.mcp_server import MCPServer
 from app.routers.utils.dependencies import get_mcp_server_by_id
-from app.schemas.mcp_server import MCPServerCreate, MCPServerRead, MCPServerUpdate
+from app.schemas.mcp_server import (
+    MCPServerCreate,
+    MCPServerRead,
+    MCPServerUpdate,
+    MCPToolsRefreshResponse,
+)
+from app.services.credential_service import CredentialService
 from app.services.mcp_server_service import MCPServerService
 from tessera_sdk.utils.auth import get_current_user  # type: ignore[import-untyped]
 
@@ -100,7 +107,39 @@ def update_mcp_server(
         raise HTTPException(status_code=400, detail=str(e)) from e
     if updated is None:
         raise HTTPException(status_code=404, detail="MCP server not found")
+    get_tool_catalog().invalidate(mcp_server.server_id)
     return updated
+
+
+@router.post(
+    "/{id}/refresh-tools",
+    response_model=MCPToolsRefreshResponse,
+)
+async def refresh_mcp_server_tools(
+    mcp_server: MCPServer = Depends(get_mcp_server_by_id),
+    _authorized: bool = Depends(rbac["update"]),
+    _current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MCPToolsRefreshResponse:
+    """Force-refresh the tool catalog for this MCP server."""
+    credential_svc = CredentialService(db)
+    headers = credential_svc.apply_credentials_with_context(
+        credential_id=mcp_server.credential_id,
+        user_id=getattr(_current_user, "id", None),
+        context=None,
+    )
+    catalog = get_tool_catalog()
+    try:
+        tools = await catalog.get_tools(mcp_server, headers, force_refresh=True)
+    except Exception as e:
+        raise HTTPException(
+            status_code=502,
+            detail="Failed to refresh tools from MCP server",
+        ) from e
+    return MCPToolsRefreshResponse(
+        server_id=mcp_server.server_id,
+        tools_count=len(tools),
+    )
 
 
 @router.delete("/{id}", status_code=204)
@@ -117,3 +156,4 @@ def delete_mcp_server(
         deleted_by_id=getattr(_current_user, "id", None),
     ):
         raise HTTPException(status_code=404, detail="MCP server not found")
+    get_tool_catalog().invalidate(mcp_server.server_id)
