@@ -25,6 +25,23 @@ def test_create_credential(db, setup_user):
     assert credential.created_by_id == setup_user.id
 
 
+def test_create_credential_fields_persisted_and_retrievable(db, setup_user):
+    """Create a credential with fields and verify they are saved and returned by get_credential_fields."""
+    svc = CredentialService(db)
+    fields = {"audience": "api://resource", "scopes": ["read", "write"]}
+    data = CredentialCreate(
+        name="MCP",
+        type=CredentialType.DELEGATED_IDENTIES_EXCHANGE,
+        fields=fields,
+    )
+    credential = svc.create_credential(data, created_by_id=setup_user.id)
+    assert credential.id is not None
+    retrieved = svc.get_credential_fields(credential.id)
+    assert retrieved is not None
+    assert retrieved["audience"] == "api://resource"
+    assert retrieved["scopes"] == ["read", "write"]
+
+
 def test_get_credential(db, setup_credential):
     """Fetch credential by ID."""
     svc = CredentialService(db)

@@ -9,6 +9,17 @@ from fastmcp import Client
 from fastmcp.client.transports import StreamableHttpTransport
 
 
+def _sanitize_headers(headers: dict[str, str] | None) -> dict[str, str]:
+    """Ensure headers are a flat dict of string keys and values for HTTP."""
+    if not headers:
+        return {}
+    return {
+        str(k): str(v)
+        for k, v in headers.items()
+        if v is not None and isinstance(v, (str, int, float))
+    }
+
+
 @asynccontextmanager
 async def client_context(
     url: str,
@@ -19,7 +30,8 @@ async def client_context(
 
     Caller is responsible for resolving headers (e.g. via CredentialService).
     """
-    transport = StreamableHttpTransport(url, headers=headers or {})
+    safe_headers = _sanitize_headers(headers)
+    transport = StreamableHttpTransport(url=url, headers=safe_headers)
     client = Client(transport)
     async with client:
         yield client

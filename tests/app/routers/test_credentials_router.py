@@ -63,7 +63,7 @@ def test_list_credential_types(client):
     ],
 )
 def test_create_credential(client, setup_user, credential_type, fields):
-    """POST /credentials creates credentials for all supported types."""
+    """POST /credentials creates credentials for all supported types; response includes redacted field keys."""
     payload = {
         "name": f"new-{credential_type}-cred",
         "type": credential_type,
@@ -76,23 +76,60 @@ def test_create_credential(client, setup_user, credential_type, fields):
     assert data["type"] == credential_type
     assert "id" in data
     assert "encrypted_data" not in data
-    assert "fields" not in data
+    # Response includes redacted field keys so client knows fields were saved
+    assert "fields" in data
+    if fields:
+        for key in fields:
+            assert key in data["fields"]
+            assert data["fields"][key] == "[REDACTED]"
+    else:
+        assert data["fields"] == {}
+    # No raw secret values in response
     for field_value in fields.values():
-        assert str(field_value) not in str(data)
+        if isinstance(field_value, list):
+            for v in field_value:
+                assert str(v) not in str(data)
+        else:
+            assert str(field_value) not in str(data)
 
 
 def test_get_credential(client, setup_credential):
-    """GET /credentials/{id} returns a credential."""
+    """GET /credentials/{id} returns a credential with redacted field keys."""
     r = client.get(f"/credentials/{setup_credential.id}")
     assert r.status_code == 200
     data = r.json()
     assert data["id"] == str(setup_credential.id)
     assert data["name"] == setup_credential.name
+    # Stored fields are returned with values redacted
+    assert "fields" in data
+    assert data["fields"] == {"token": "[REDACTED]"}
 
 
 def test_get_credential_not_found(client):
     """GET /credentials/{id} returns 404 for unknown id."""
     r = client.get(f"/credentials/{uuid4()}")
+    assert r.status_code == 404
+
+
+def test_reveal_credential_fields(client, setup_user):
+    """POST /credentials/{id}/reveal-fields returns decrypted field values."""
+    payload = {
+        "name": "Reveal Test",
+        "type": CredentialType.DELEGATED_IDENTIES_EXCHANGE,
+        "fields": {"audience": "api://test", "scopes": ["read"]},
+    }
+    r = client.post("/credentials", json=payload)
+    assert r.status_code == 201
+    cred_id = r.json()["id"]
+    r2 = client.post(f"/credentials/{cred_id}/reveal-fields")
+    assert r2.status_code == 200
+    data = r2.json()
+    assert data["fields"] == {"audience": "api://test", "scopes": ["read"]}
+
+
+def test_reveal_credential_fields_not_found(client):
+    """POST /credentials/{id}/reveal-fields returns 404 for unknown id."""
+    r = client.post(f"/credentials/{uuid4()}/reveal-fields")
     assert r.status_code == 404
 
 
@@ -111,6 +148,25 @@ def test_delete_credential(client, setup_credential):
     assert r.status_code == 204
     r2 = client.get(f"/credentials/{setup_credential.id}")
     assert r2.status_code == 404
+
+
+def test_create_credential_then_get_returns_redacted_fields(client, setup_user):
+    """POST with fields then GET returns same credential with field keys redacted (fields are persisted)."""
+    payload = {
+        "name": "MCP",
+        "type": CredentialType.DELEGATED_IDENTIES_EXCHANGE,
+        "fields": {"audience": "api://resource", "scopes": ["read", "write"]},
+    }
+    r = client.post("/credentials", json=payload)
+    assert r.status_code == 201
+    created = r.json()
+    cred_id = created["id"]
+    assert created["fields"] == {"audience": "[REDACTED]", "scopes": "[REDACTED]"}
+    r2 = client.get(f"/credentials/{cred_id}")
+    assert r2.status_code == 200
+    gotten = r2.json()
+    assert gotten["name"] == "MCP"
+    assert gotten["fields"] == {"audience": "[REDACTED]", "scopes": "[REDACTED]"}
 
 
 def test_create_credential_invalid_fields(client):

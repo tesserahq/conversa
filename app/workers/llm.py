@@ -116,6 +116,7 @@ class LLMRunner:
         msg: InboundMessage,
         history: Optional[List[dict[str, str]]] = None,
         context: Optional[dict[str, Any]] = None,
+        toolsets: Optional[List[Any]] = None,
     ) -> str:
         prompt = msg.text or ""
         message_history = _message_list_with_system_prompt(
@@ -123,9 +124,10 @@ class LLMRunner:
             history or [],
             context=context,
         )
+        print(f"Toolsets: {toolsets}")
+        logger.info(f"Toolsets: {toolsets}")
         result = await self._agent.run(
-            prompt,
-            message_history=message_history,
+            prompt, message_history=message_history, toolsets=toolsets
         )
         return str(result.output)
 
@@ -154,11 +156,9 @@ def build_llm_runner_from_env() -> LLMRunner:
 
 
 def _get_system_prompt() -> str:
-    print(f"Getting system prompt from database")
     with db_session() as db:
         system_prompt = SystemPromptService(db).get_current_content(SYSTEM_PROMPT_NAME)
         if system_prompt:
             return system_prompt
-    print(f"No system prompt found in database, using default")
 
     return DefaultSystemPrompt.CONTENT

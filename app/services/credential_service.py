@@ -10,11 +10,12 @@ from sqlalchemy.orm import Query, Session
 from app.core.credentials import (
     decrypt_credential_fields,
     encrypt_credential_fields,
+    redact_credential_fields,
     validate_credential_fields,
 )
 from app.constants.credentials import CredentialType
 from app.models.credential import Credential
-from app.schemas.credential import CredentialCreate, CredentialUpdate
+from app.schemas.credential import CredentialCreate, CredentialRead, CredentialUpdate
 from app.services.mcp_delegated_token_service import MCPDelegatedTokenService
 from app.services.soft_delete_service import SoftDeleteService
 from app.utils.db.filtering import apply_filters
@@ -124,6 +125,21 @@ class CredentialService(SoftDeleteService[Credential]):
             return decrypt_credential_fields(cast(bytes, credential.encrypted_data))
         except Exception:
             return None
+
+    def to_credential_read(self, credential: Credential) -> CredentialRead:
+        """Build CredentialRead from a Credential with redacted fields (no secrets in response)."""
+        fields = self.get_credential_fields(credential.id) or {}
+        redacted = redact_credential_fields(fields)
+        return CredentialRead(
+            id=credential.id,
+            name=credential.name,
+            type=credential.type,
+            created_by_id=credential.created_by_id,
+            created_at=credential.created_at,
+            updated_at=credential.updated_at,
+            extended_info=None,
+            fields=redacted,
+        )
 
     def search(self, filters: Dict[str, Any]) -> List[Credential]:
         """Search credentials by filters."""

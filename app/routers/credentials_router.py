@@ -4,7 +4,7 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi_pagination import Page, Params
+from fastapi_pagination import Page, Params, create_page
 from fastapi_pagination.ext.sqlalchemy import paginate
 from sqlalchemy.orm import Session
 
@@ -14,6 +14,7 @@ from app.core.credentials import credential_registry
 from app.db import get_db
 from app.schemas.credential import (
     CredentialCreate,
+    CredentialFieldsReveal,
     CredentialRead,
     CredentialTypeInfo,
     CredentialUpdate,
@@ -58,7 +59,9 @@ def list_credentials(
     """List all credentials with pagination."""
     svc = CredentialService(db)
     query = svc.get_credentials_query()
-    return paginate(query, params=params)
+    page = paginate(query, params=params)
+    items = [svc.to_credential_read(c) for c in page.items]
+    return create_page(items, total=page.total, params=params)
 
 
 @router.post("", response_model=CredentialRead, status_code=201)
@@ -74,7 +77,8 @@ def create_credential(
         data,
         created_by_id=getattr(_current_user, "id", None),
     )
-    return credential
+    svc = CredentialService(db)
+    return svc.to_credential_read(credential)
 
 
 @router.get("/{credential_id}", response_model=CredentialRead)
@@ -89,7 +93,32 @@ def get_credential(
     credential = svc.get_credential(credential_id)
     if credential is None:
         raise HTTPException(status_code=404, detail="Credential not found")
-    return credential
+    return svc.to_credential_read(credential)
+
+
+@router.post(
+    "/{credential_id}/reveal-fields",
+    response_model=CredentialFieldsReveal,
+    status_code=200,
+)
+def reveal_credential_fields(
+    credential_id: UUID,
+    _authorized: bool = Depends(rbac["read"]),
+    _current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CredentialFieldsReveal:
+    """Return decrypted credential field values. Use only when you need to verify or edit stored data."""
+    svc = CredentialService(db)
+    credential = svc.get_credential(credential_id)
+    if credential is None:
+        raise HTTPException(status_code=404, detail="Credential not found")
+    fields = svc.get_credential_fields(credential_id)
+    if fields is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Could not decrypt credential fields",
+        )
+    return CredentialFieldsReveal(fields=fields)
 
 
 @router.patch("/{credential_id}", response_model=CredentialRead)
@@ -105,7 +134,7 @@ def update_credential(
     credential = svc.update_credential(credential_id, data)
     if credential is None:
         raise HTTPException(status_code=404, detail="Credential not found")
-    return credential
+    return svc.to_credential_read(credential)
 
 
 @router.delete("/{credential_id}", status_code=204)

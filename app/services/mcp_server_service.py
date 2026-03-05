@@ -45,6 +45,15 @@ class MCPServerService(SoftDeleteService[MCPServer]):
         """Get a query for MCP servers (for pagination)."""
         return self.db.query(MCPServer).order_by(MCPServer.server_id)
 
+    def get_enabled_servers(self) -> List[MCPServer]:
+        """Return enabled MCP servers, ordered by server_id."""
+        return (
+            self.db.query(MCPServer)
+            .filter(MCPServer.enabled == True)
+            .order_by(MCPServer.server_id)
+            .all()
+        )
+
     def create_mcp_server(self, data: MCPServerCreate) -> MCPServer:
         """Create an MCP server. Raises ValueError if server_id exists."""
         if self.get_mcp_server_by_server_id(data.server_id) is not None:
