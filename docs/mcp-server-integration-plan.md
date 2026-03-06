@@ -109,7 +109,7 @@ Introduce `MCPToolExecutor`:
 Add an adapter that converts catalog tools into LLM-callable tool definitions at request time.
 
 Flow per user request:
-
+ 
 1. Resolve user (`user_id`) from existing channel/linking flow.
 2. Resolve enabled MCP servers for that tenant/env.
 3. Load tool catalog (cached).
@@ -310,3 +310,8 @@ Initial registry payload proposal:
 - `credential_id`: `<credential-id-for-delegated-identies-exchange>` (optional; nullable)
 - `enabled`: `true`
 - `tool_prefix`: `linden`
+
+
+##  Future
+
+Enabled MCP Servers should be cache same with tools

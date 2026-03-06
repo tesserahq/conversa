@@ -92,8 +92,16 @@ class CredentialRead(BaseModel):
     created_by_id: UUID | None
     created_at: datetime
     updated_at: datetime
+    extended_info: dict[str, Any] | None = None
+    fields: dict[str, Any] = Field(default_factory=dict)
 
     model_config = {"from_attributes": True}
+
+
+class CredentialFieldsReveal(BaseModel):
+    """Response schema for reveal-fields: decrypted credential field values. Use with care."""
+
+    fields: dict[str, Any] = Field(default_factory=dict)
 
 
 class CredentialInfo(BaseModel):

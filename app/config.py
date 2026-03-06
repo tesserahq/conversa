@@ -43,6 +43,10 @@ class Settings(BaseSettings):
         default=None,
         json_schema_extra={"env": "IDENTIES_HOST"},
     )
+    link_url: str = Field(
+        default="https://app.mylinden.family/link/{link_token}",
+        json_schema_extra={"env": "LINK_URL"},
+    )
     rollbar_access_token: Optional[str] = Field(
         default=None, json_schema_extra={"env": "ROLLBAR_ACCESS_TOKEN"}
     )  # Optional field
@@ -141,6 +145,10 @@ class Settings(BaseSettings):
     # LLM / LiteLLM
     llm_model: str = Field(
         default="gpt-4o-mini", json_schema_extra={"env": "LLM_MODEL"}
+    )
+    mcp_tools_enabled: bool = Field(
+        default=False,
+        json_schema_extra={"env": "MCP_TOOLS_ENABLED"},
     )
     litellm_api_key: Optional[str] = Field(
         default=None, json_schema_extra={"env": "LITELLM_API_KEY"}

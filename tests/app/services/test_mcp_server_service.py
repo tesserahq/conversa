@@ -61,3 +61,35 @@ def test_update_mcp_server_can_set_credential_id_to_none(db, setup_credential):
     assert updated is not None
     assert updated.name == "Linden MCP Updated"
     assert updated.credential_id is None
+
+
+def test_get_enabled_servers_returns_only_enabled(db):
+    """get_enabled_servers returns only enabled servers, ordered by server_id."""
+    svc = MCPServerService(db)
+    svc.create_mcp_server(
+        MCPServerCreate(
+            server_id="alpha",
+            name="Alpha",
+            url="https://alpha.example/mcp",
+            enabled=True,
+        )
+    )
+    svc.create_mcp_server(
+        MCPServerCreate(
+            server_id="bravo",
+            name="Bravo",
+            url="https://bravo.example/mcp",
+            enabled=False,
+        )
+    )
+    svc.create_mcp_server(
+        MCPServerCreate(
+            server_id="charlie",
+            name="Charlie",
+            url="https://charlie.example/mcp",
+            enabled=True,
+        )
+    )
+    enabled = svc.get_enabled_servers()
+    assert len(enabled) == 2
+    assert [s.server_id for s in enabled] == ["alpha", "charlie"]
