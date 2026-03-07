@@ -22,12 +22,12 @@ async def test_client_context_passes_url_and_headers():
         client_cls.return_value = client_instance
 
         async with client_context(
-            "https://api.example.com/mcp",
+            url="https://api.example.com/mcp",
             headers={"Authorization": "Bearer token123"},
         ) as client:
             assert client is client_instance
             transport_cls.assert_called_once_with(
-                "https://api.example.com/mcp",
+                url="https://api.example.com/mcp",
                 headers={"Authorization": "Bearer token123"},
             )
             client_cls.assert_called_once_with(transport_instance)
@@ -51,6 +51,6 @@ async def test_client_context_with_empty_headers():
 
         async with client_context("https://other.example/mcp", headers=None) as _:
             transport_cls.assert_called_once_with(
-                "https://other.example/mcp",
+                url="https://other.example/mcp",
                 headers={},
             )

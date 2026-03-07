@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from tessera_sdk.utils.cache import Cache  # type: ignore[import-untyped]
@@ -9,6 +10,8 @@ from tessera_sdk.utils.cache import Cache  # type: ignore[import-untyped]
 from app.mcp.client_factory import client_context
 from app.models.mcp_server import MCPServer
 from app.schemas.mcp_tool import MCPCatalogTool, build_qualified_name
+
+logger = logging.getLogger(__name__)
 
 TOOL_CATALOG_NAMESPACE = "mcp_tool_catalog"
 CACHE_KEY_PREFIX = "mcp:tools:"
@@ -80,8 +83,21 @@ class ToolCatalog:
             if raw is not None and isinstance(raw, list):
                 return [MCPCatalogTool.model_validate(t) for t in raw]
 
+        tools = []
         async with client_context(mcp_server.url, headers) as client:
-            tools = await client.list_tools()
+            try:
+                tools = await client.list_tools()
+            except Exception as e:
+                # Surface MCP server errors (e.g. "Invalid request parameters") with context
+                url = getattr(mcp_server, "url", str(mcp_server))
+                detail = str(e)
+                # MCPError and similar expose .data with server-provided detail
+                if getattr(e, "data", None):
+                    detail = f"{detail} (server detail: {e.data})"
+                logger.warning("MCP get_tools failed for %s: %s", url, detail)
+                raise RuntimeError(
+                    f"Failed to get tools from MCP server {url}: {detail}"
+                ) from e
 
         catalog_tools = [_tool_to_catalog_tool(t, server_id, prefix) for t in tools]
         payload = [t.model_dump(mode="json") for t in catalog_tools]

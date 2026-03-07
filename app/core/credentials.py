@@ -185,3 +185,8 @@ def decrypt_credential_fields(encrypted_data: bytes) -> Dict[str, Any]:
     """Decrypt credential fields."""
     plaintext = _decrypt_value(encrypted_data)
     return json.loads(plaintext)
+
+
+def redact_credential_fields(fields: Dict[str, Any]) -> Dict[str, str]:
+    """Return a copy of fields with all values replaced by a placeholder (for API responses)."""
+    return {k: "[REDACTED]" for k in fields}
