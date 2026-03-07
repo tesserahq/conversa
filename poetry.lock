@@ -222,18 +222,23 @@ tz = ["tzdata"]
 
 [[package]]
 name = "algoliasearch"
-version = "3.0.0"
-description = "Algolia Search API Client for Python."
+version = "4.37.0"
+description = "A fully-featured and blazing-fast Python API client to interact with Algolia."
 optional = false
-python-versions = ">=3.4"
+python-versions = ">=3.8.1"
 groups = ["main"]
 files = [
-    {file = "algoliasearch-3.0.0-py2.py3-none-any.whl", hash = "sha256:e150a577435f5256a52e5f50c865138df2e434db640b9e71556e84c169a1da52"},
-    {file = "algoliasearch-3.0.0.tar.gz", hash = "sha256:abd9316f81fec1e322db4faf183081383b334188ac8184baab36405533038cdd"},
+    {file = "algoliasearch-4.37.0-py3-none-any.whl", hash = "sha256:1fcf1e757bc81a62197a3309ec70a62801d0c524dd3a9300a2014c8a6216f1e1"},
+    {file = "algoliasearch-4.37.0.tar.gz", hash = "sha256:9ddae64b96262fdcc62403b65f11d776b80baecd4b4a337fc57bd34d1ec5e962"},
 ]
 
 [package.dependencies]
-requests = ">=2.21,<3.0"
+aiohttp = ">=3.10.11"
+async-timeout = ">=4.0.3"
+pydantic = ">=2"
+python-dateutil = ">=2.8.2"
+requests = ">=2.32.3"
+urllib3 = ">=2.2.3"
 
 [[package]]
 name = "amqp"
@@ -386,7 +391,6 @@ description = "Timeout context manager for asyncio programs"
 optional = false
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "python_full_version < \"3.11.3\""
 files = [
     {file = "async_timeout-5.0.1-py3-none-any.whl", hash = "sha256:39e3809566ff85354557ec2398b55e096c8364bacac9405a7a1fa429e77fe76c"},
     {file = "async_timeout-5.0.1.tar.gz", hash = "sha256:d9321a7a3d5a6a5e187e824d2fa0793ce379a202935782d555d6e9d2735677d3"},
@@ -6245,4 +6249,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.14"
-content-hash = "923a7f8bf388b2db900197920ba85839689478ddd61400c6abe8490d7f5d801e"
+content-hash = "479829670fc574feb82a18fbfaabfa6f30c43ba7ed814f1a2505b3149addec25"
