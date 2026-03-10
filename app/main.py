@@ -22,10 +22,11 @@ from app.infra.logging_config import get_logger
 from app.db import db_manager
 from app.utils.metrics import PrometheusMiddleware, metrics
 from app.infra.logging_config import get_logger
+from tessera_sdk.fastapi import get_livez_readyz_router
 
 logger = get_logger()
 
-SKIP_AUTH_PATHS = ["/health", "/openapi.json", "/docs", "/metrics"]
+SKIP_AUTH_PATHS = ["/livez", "/readyz", "/openapi.json", "/docs", "/metrics"]
 
 
 @asynccontextmanager
@@ -127,6 +128,8 @@ def create_app(testing: bool = False, auth_middleware=None) -> FastAPI:
     app.include_router(context_sources_router)
     app.include_router(credentials_router)
     app.include_router(mcp_servers_router)
+
+    app.include_router(get_livez_readyz_router())
 
     return app
 
