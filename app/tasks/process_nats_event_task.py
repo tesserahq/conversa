@@ -17,8 +17,8 @@ import asyncio
 from telegram import Bot
 
 from app.schemas.session import MessageCreate
-from app.services.session_message_service import SessionMessageService
-from app.services.session_service import SessionService
+from app.repositories.session_message_repository import SessionMessageRepository
+from app.repositories.session_repository import SessionRepository
 
 logger = get_logger("nats_event_task")
 
@@ -51,8 +51,8 @@ def _persist_linked_notification(
 ) -> None:
     """Persist outbound linked-account notification in session history."""
     with db_manager.db_session() as db:
-        session_service = SessionService(db)
-        message_service = SessionMessageService(db)
+        session_service = SessionRepository(db)
+        message_service = SessionMessageRepository(db)
         session = (
             db.query(Session)
             .filter(Session.channel == channel, Session.chat_id == chat_id)

@@ -12,8 +12,8 @@ from app.config import get_settings
 from app.core.session_key import build_session_key
 from app.models.session import Session
 from app.schemas.session import MessageCreate
-from app.services.session_message_service import SessionMessageService
-from app.services.session_service import SessionService
+from app.repositories.session_message_repository import SessionMessageRepository
+from app.repositories.session_repository import SessionRepository
 from uuid import UUID
 
 
@@ -45,8 +45,8 @@ def _is_session_expired(session: Session) -> bool:
 class SessionManager:
     def __init__(self, db: DBSession) -> None:
         self._db = db
-        self._session_svc = SessionService(db)
-        self._message_svc = SessionMessageService(db)
+        self._session_svc = SessionRepository(db)
+        self._message_svc = SessionMessageRepository(db)
 
     def get_or_create_session(
         self,

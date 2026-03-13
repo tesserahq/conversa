@@ -6,12 +6,12 @@ import pytest
 
 from app.constants.credentials import CredentialType
 from app.schemas.credential import CredentialCreate, CredentialUpdate
-from app.services.credential_service import CredentialService
+from app.repositories.credential_repository import CredentialRepository
 
 
 def test_create_credential(db, setup_user):
     """Create a credential and verify it is stored."""
-    svc = CredentialService(db)
+    svc = CredentialRepository(db)
     data = CredentialCreate(
         name="test-bearer",
         type=CredentialType.BEARER_AUTH,
@@ -27,7 +27,7 @@ def test_create_credential(db, setup_user):
 
 def test_create_credential_fields_persisted_and_retrievable(db, setup_user):
     """Create a credential with fields and verify they are saved and returned by get_credential_fields."""
-    svc = CredentialService(db)
+    svc = CredentialRepository(db)
     fields = {"audience": "api://resource", "scopes": ["read", "write"]}
     data = CredentialCreate(
         name="MCP",
@@ -44,7 +44,7 @@ def test_create_credential_fields_persisted_and_retrievable(db, setup_user):
 
 def test_get_credential(db, setup_credential):
     """Fetch credential by ID."""
-    svc = CredentialService(db)
+    svc = CredentialRepository(db)
     found = svc.get_credential(setup_credential.id)
     assert found is not None
     assert found.id == setup_credential.id
@@ -53,14 +53,14 @@ def test_get_credential(db, setup_credential):
 
 def test_get_credential_not_found(db):
     """Fetch non-existent credential returns None."""
-    svc = CredentialService(db)
+    svc = CredentialRepository(db)
     found = svc.get_credential(uuid4())
     assert found is None
 
 
 def test_get_credentials_list(db, setup_credential):
     """List credentials with pagination."""
-    svc = CredentialService(db)
+    svc = CredentialRepository(db)
     credentials = svc.get_credentials(skip=0, limit=10)
     assert len(credentials) >= 1
     ids = [c.id for c in credentials]
@@ -69,7 +69,7 @@ def test_get_credentials_list(db, setup_credential):
 
 def test_update_credential(db, setup_credential):
     """Update credential name and fields."""
-    svc = CredentialService(db)
+    svc = CredentialRepository(db)
     data = CredentialUpdate(name="updated-name", fields={"token": "new-token"})
     updated = svc.update_credential(setup_credential.id, data)
     assert updated is not None
@@ -80,7 +80,7 @@ def test_update_credential(db, setup_credential):
 
 def test_delete_credential(db, setup_credential):
     """Soft delete credential."""
-    svc = CredentialService(db)
+    svc = CredentialRepository(db)
     result = svc.delete_credential(setup_credential.id)
     assert result is True
     found = svc.get_credential(setup_credential.id)
@@ -89,7 +89,7 @@ def test_delete_credential(db, setup_credential):
 
 def test_validate_credential_fields_rejects_invalid(db, setup_user):
     """Create with invalid fields raises ValueError."""
-    svc = CredentialService(db)
+    svc = CredentialRepository(db)
     data = CredentialCreate(
         name="bad",
         type=CredentialType.BEARER_AUTH,
@@ -101,7 +101,7 @@ def test_validate_credential_fields_rejects_invalid(db, setup_user):
 
 def test_apply_credentials_bearer(db, setup_user):
     """apply_credentials adds Bearer header for bearer_auth."""
-    svc = CredentialService(db)
+    svc = CredentialRepository(db)
     # Create credential with known token for apply test
     data = CredentialCreate(
         name="bearer-test",
@@ -115,14 +115,14 @@ def test_apply_credentials_bearer(db, setup_user):
 
 def test_apply_credentials_default_m2m_when_credential_id_none(db):
     """apply_credentials with credential_id=None uses default M2M via provider."""
-    svc = CredentialService(db, m2m_token_provider=lambda: "m2m-token-xyz")
+    svc = CredentialRepository(db, m2m_token_provider=lambda: "m2m-token-xyz")
     headers = svc.apply_credentials(credential_id=None)
     assert headers["Authorization"] == "Bearer m2m-token-xyz"
 
 
 def test_apply_credentials_m2m_identies_uses_provider(db, setup_user):
     """apply_credentials for M2M_IDENTIES uses default M2M token from provider."""
-    svc = CredentialService(db, m2m_token_provider=lambda: "m2m-identies-token")
+    svc = CredentialRepository(db, m2m_token_provider=lambda: "m2m-identies-token")
     data = CredentialCreate(
         name="m2m-test",
         type=CredentialType.M2M_IDENTIES,
@@ -135,7 +135,7 @@ def test_apply_credentials_m2m_identies_uses_provider(db, setup_user):
 
 def test_apply_credentials_default_m2m_raises_when_provider_returns_none(db):
     """apply_credentials with credential_id=None raises when provider returns None."""
-    svc = CredentialService(db, m2m_token_provider=lambda: None)
+    svc = CredentialRepository(db, m2m_token_provider=lambda: None)
     with pytest.raises(ValueError, match="Default M2M auth requires an M2M token"):
         svc.apply_credentials(credential_id=None)
 
@@ -151,7 +151,7 @@ class _FakeDelegatedTokenService:
 
 def test_apply_credentials_with_context_with_none_credential_adds_no_auth(db):
     """MCP credential application keeps headers unchanged when credential_id is None."""
-    svc = CredentialService(db, m2m_token_provider=lambda: "unused")
+    svc = CredentialRepository(db, m2m_token_provider=lambda: "unused")
     headers = svc.apply_credentials_with_context(
         credential_id=None,
         headers={"X-Request-Id": "abc"},
@@ -161,7 +161,7 @@ def test_apply_credentials_with_context_with_none_credential_adds_no_auth(db):
 
 def test_apply_credentials_with_context_with_bearer_credential(db, setup_user):
     """MCP credential application supports static bearer credentials."""
-    svc = CredentialService(db)
+    svc = CredentialRepository(db)
     credential = svc.create_credential(
         CredentialCreate(
             name="mcp-bearer",
@@ -177,7 +177,7 @@ def test_apply_credentials_with_context_with_bearer_credential(db, setup_user):
 def test_apply_credentials_with_context_delegated_exchange(db, setup_user):
     """Delegated exchange credentials call delegated token provider with user context."""
     delegated = _FakeDelegatedTokenService()
-    svc = CredentialService(
+    svc = CredentialRepository(
         db,
         delegated_token_service=delegated,
         m2m_token_provider=lambda: "unused",
@@ -205,7 +205,7 @@ def test_apply_credentials_with_context_delegated_exchange(db, setup_user):
 
 def test_apply_credentials_with_context_delegated_requires_user_id(db, setup_user):
     """Delegated exchange credentials require user_id in request context."""
-    svc = CredentialService(
+    svc = CredentialRepository(
         db,
         delegated_token_service=_FakeDelegatedTokenService(),
         m2m_token_provider=lambda: "unused",

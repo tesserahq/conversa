@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date, datetime
+from datetime import datetime
 from typing import Any, List, Optional
 
 from pydantic_ai import Agent
@@ -12,7 +12,7 @@ from app.channels.envelope import InboundMessage
 from app.config import get_settings
 from app.infra.logging_config import get_logger
 from app.utils.db.db_session_helper import db_session
-from app.services.system_prompt_service import SystemPromptService
+from app.repositories.system_prompt_repository import SystemPromptRepository
 from app.constants.default_system_prompt import DefaultSystemPrompt
 from pydantic_ai.messages import (
     ModelRequest,
@@ -31,7 +31,7 @@ def add_the_date_and_time() -> str:
 
 def add_the_user_name() -> str:
     """Return the user's name. Use when the user asks for their name."""
-    return f"The user's name is Peter"
+    return "The user's name is Peter"
 
 
 def _history_to_message_list(history: List[dict[str, str]]) -> List[Any]:
@@ -157,7 +157,9 @@ def build_llm_runner_from_env() -> LLMRunner:
 
 def _get_system_prompt() -> str:
     with db_session() as db:
-        system_prompt = SystemPromptService(db).get_current_content(SYSTEM_PROMPT_NAME)
+        system_prompt = SystemPromptRepository(db).get_current_content(
+            SYSTEM_PROMPT_NAME
+        )
         if system_prompt:
             return system_prompt
 

@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.models.context_snapshot import ContextSnapshot
 
 
-class ContextSnapshotService:
+class ContextSnapshotRepository:
     """Manages context snapshots for chat-time reads and sync worker writes."""
 
     def __init__(self, db: Session) -> None:

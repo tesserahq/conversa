@@ -59,7 +59,7 @@ Introduce `MCPAuthResolverService`:
   - `bearer_auth` / `api_key` / `basic_auth` -> use existing credential fields
   - `delegated_identies_exchange` -> call delegated token provider
 
-Introduce `MCPDelegatedTokenService` (used only for delegated credential type):
+Introduce `MCPDelegatedTokenRepository` (used only for delegated credential type):
 
 - input: `user_id`, delegated credential fields (`audience`, `scopes`), request context
 - calls `IdentiesClient.exchange_token(...)`
@@ -89,7 +89,7 @@ Implementation note:
 
 ### 4) Tool Catalog + Execution Layer
 
-Introduce `MCPToolCatalogService`:
+Introduce `MCPToolCatalogRepository`:
 
 - fetch tools with `list_tools()`
 - normalize to internal schema:

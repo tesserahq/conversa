@@ -3,7 +3,7 @@
 from typing import Optional, cast
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi_pagination import Page, Params
 from fastapi_pagination.ext.sqlalchemy import paginate
 from sqlalchemy.orm import Session
@@ -24,7 +24,7 @@ from app.schemas.mcp_server import (
     MCPServerUpdate,
     MCPToolsRefreshResponse,
 )
-from app.services.mcp_server_service import MCPServerService
+from app.repositories.mcp_server_repository import MCPServerRepository
 from tessera_sdk.utils.auth import get_current_user  # type: ignore[import-untyped]
 
 router = APIRouter(
@@ -53,7 +53,7 @@ def list_mcp_servers(
     db: Session = Depends(get_db),
 ) -> Page[MCPServerRead]:
     """List all MCP servers with pagination."""
-    svc = MCPServerService(db)
+    svc = MCPServerRepository(db)
     query = svc.get_mcp_servers_query()
     return paginate(query, params=params)
 

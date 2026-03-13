@@ -10,7 +10,7 @@ from sqlalchemy.orm import Query, Session as DBSession
 from app.models.system_prompt import SystemPrompt, SystemPromptVersion
 
 
-class SystemPromptService:
+class SystemPromptRepository:
     """Manages system prompts and their version history."""
 
     def __init__(self, db: DBSession) -> None:

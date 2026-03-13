@@ -13,8 +13,8 @@ flowchart TB
         SyncTask[sync_context_all_due_task]
         PerUser[sync_context_for_user_task]
         Fetcher[ContextPackFetcher]
-        Merge[ContextMergeService]
-        SnapshotSvc[ContextSnapshotService]
+        Merge[ContextMergeRepository]
+        SnapshotSvc[ContextSnapshotRepository]
         Sources[(context_sources)]
         Users[(users)]
         States[(context_source_state)]
@@ -33,7 +33,7 @@ flowchart TB
 
     subgraph chat [Chat-time Path]
         Router[Router.route_to_llm]
-        SnapshotRead[ContextSnapshotService.get_latest]
+        SnapshotRead[ContextSnapshotRepository.get_latest]
         LLM[LLMRunner.run]
         Router --> SnapshotRead
         SnapshotRead --> Snapshots
@@ -62,7 +62,7 @@ Sync flow per source:
 
 ### 3. Merge Logic
 
-`ContextMergeService.merge_packs` combines multiple source packs:
+`ContextMergeRepository.merge_packs` combines multiple source packs:
 
 - **facts**: Priority winner (first source wins per key)
 - **recents**: Union with deduplication
@@ -74,7 +74,7 @@ Sync flow per source:
 In `Router.route_to_llm`:
 
 1. After `get_or_create_session`, if `session.user_id` exists:
-2. Fetch latest snapshot via `ContextSnapshotService.get_latest_snapshot(user_id)`.
+2. Fetch latest snapshot via `ContextSnapshotRepository.get_latest_snapshot(user_id)`.
 3. If found: pass `context=snapshot.payload` to `LLMRunner.run`.
 4. If not found: pass `context=None` and enqueue `sync_context_for_user_task` for next time.
 

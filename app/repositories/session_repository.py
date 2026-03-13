@@ -9,12 +9,12 @@ from sqlalchemy.orm import Query, Session as DBSession
 
 from app.models.session import Session
 from app.schemas.session import SessionCreate, SessionUpdate
-from app.services.soft_delete_service import SoftDeleteService
+from app.repositories.soft_delete_repository import SoftDeleteRepository
 from app.utils.db.filtering import apply_filters
 from uuid import UUID
 
 
-class SessionService(SoftDeleteService[Session]):
+class SessionRepository(SoftDeleteRepository[Session]):
     def __init__(self, db: DBSession) -> None:
         super().__init__(db, Session)
 

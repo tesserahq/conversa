@@ -4,12 +4,11 @@ import json
 from datetime import datetime, timedelta, timezone
 
 from app.schemas.context_pack import (
-    FACTS_MAX_BYTES,
     MergeableContextPack,
     MergedContextPayload,
     RECENTS_MAX_COUNT,
 )
-from app.services.context_merge_service import ContextMergeService
+from app.repositories.context_merge_repository import ContextMergeRepository
 
 
 def _make_pack(
@@ -32,7 +31,7 @@ def _make_pack(
 
 def test_merge_packs_empty_returns_empty_payload():
     """merge_packs with empty list returns empty MergedContextPayload."""
-    svc = ContextMergeService()
+    svc = ContextMergeRepository()
     result = svc.merge_packs([])
     assert isinstance(result, MergedContextPayload)
     assert result.schema_version == "1.0"
@@ -49,7 +48,7 @@ def test_merge_packs_single_pack():
         recents={"top_entities": [{"id": "dep_1", "label": "Child"}]},
         pointers={"documents": ["doc_9"]},
     )
-    svc = ContextMergeService()
+    svc = ContextMergeRepository()
     result = svc.merge_packs([pack])
     assert result.schema_version == "1.0"
     assert result.facts == {"display_name": "Emi", "locale": "es-ES"}
@@ -61,7 +60,7 @@ def test_merge_packs_facts_priority_winner():
     """Facts: first pack wins when both have the same key."""
     pack1 = _make_pack("linden", facts={"display_name": "Emi"})
     pack2 = _make_pack("vaulta", facts={"display_name": "Other"})
-    svc = ContextMergeService()
+    svc = ContextMergeRepository()
     result = svc.merge_packs([pack1, pack2])
     assert result.facts["display_name"] == "Emi"
 
@@ -70,7 +69,7 @@ def test_merge_packs_facts_merged_from_different_keys():
     """Facts: keys from different packs are merged."""
     pack1 = _make_pack("linden", facts={"display_name": "Emi"})
     pack2 = _make_pack("vaulta", facts={"timezone": "Europe/Madrid"})
-    svc = ContextMergeService()
+    svc = ContextMergeRepository()
     result = svc.merge_packs([pack1, pack2])
     assert result.facts["display_name"] == "Emi"
     assert result.facts["timezone"] == "Europe/Madrid"
@@ -86,7 +85,7 @@ def test_merge_packs_recents_union_with_dedup_by_id():
         "vaulta",
         recents={"top_entities": [{"id": "dep_1", "label": "Child (dup)"}]},
     )
-    svc = ContextMergeService()
+    svc = ContextMergeRepository()
     result = svc.merge_packs([pack1, pack2])
     assert len(result.recents["top_entities"]) == 1
     assert result.recents["top_entities"][0]["id"] == "dep_1"
@@ -102,7 +101,7 @@ def test_merge_packs_recents_union_distinct_items():
         "vaulta",
         recents={"top_entities": [{"id": "doc_9", "label": "Will"}]},
     )
-    svc = ContextMergeService()
+    svc = ContextMergeRepository()
     result = svc.merge_packs([pack1, pack2])
     assert len(result.recents["top_entities"]) == 2
     ids = {item["id"] for item in result.recents["top_entities"]}
@@ -113,7 +112,7 @@ def test_merge_packs_pointers_union():
     """Pointers: union per category with deduplication."""
     pack1 = _make_pack("linden", pointers={"documents": ["doc_9"]})
     pack2 = _make_pack("vaulta", pointers={"documents": ["doc_10", "doc_9"]})
-    svc = ContextMergeService()
+    svc = ContextMergeRepository()
     result = svc.merge_packs([pack1, pack2])
     assert result.pointers["documents"] == ["doc_9", "doc_10"]
 
@@ -123,7 +122,7 @@ def test_merge_packs_generated_at_is_max():
     base = datetime.now(timezone.utc)
     pack1 = _make_pack("linden", generated_at=base - timedelta(hours=1))
     pack2 = _make_pack("vaulta", generated_at=base + timedelta(hours=1))
-    svc = ContextMergeService()
+    svc = ContextMergeRepository()
     result = svc.merge_packs([pack1, pack2])
     assert result.generated_at == pack2.generated_at
 
@@ -139,7 +138,7 @@ def test_merge_packs_recents_cap_applied():
             ]
         },
     )
-    svc = ContextMergeService()
+    svc = ContextMergeRepository()
     result = svc.merge_packs([pack])
     assert len(result.recents["top_entities"]) == RECENTS_MAX_COUNT
 
@@ -147,7 +146,7 @@ def test_merge_packs_recents_cap_applied():
 def test_merge_packs_to_snapshot_dict_serializable():
     """to_snapshot_dict produces JSON-serializable dict with ISO generated_at."""
     pack = _make_pack("linden", facts={"display_name": "Emi"})
-    svc = ContextMergeService()
+    svc = ContextMergeRepository()
     result = svc.merge_packs([pack])
     snapshot_dict = result.to_snapshot_dict()
     assert "schema_version" in snapshot_dict

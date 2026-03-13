@@ -2,13 +2,13 @@
 
 import pytest
 
-from app.services.system_prompt_service import SystemPromptService
+from app.repositories.system_prompt_repository import SystemPromptRepository
 
 
 def test_get_system_prompt_by_name_found(db, setup_system_prompt):
     """get_system_prompt_by_name returns the prompt when it exists."""
     prompt = setup_system_prompt
-    svc = SystemPromptService(db)
+    svc = SystemPromptRepository(db)
     found = svc.get_system_prompt_by_name(prompt.name)
     assert found is not None
     assert found.id == prompt.id
@@ -17,13 +17,13 @@ def test_get_system_prompt_by_name_found(db, setup_system_prompt):
 
 def test_get_system_prompt_by_name_not_found(db):
     """get_system_prompt_by_name returns None for unknown name."""
-    svc = SystemPromptService(db)
+    svc = SystemPromptRepository(db)
     assert svc.get_system_prompt_by_name("nonexistent") is None
 
 
 def test_get_current_content_found(db):
     """get_current_content returns the current version content when prompt exists (uses seeded default)."""
-    svc = SystemPromptService(db)
+    svc = SystemPromptRepository(db)
     content = svc.get_current_content("default")
     assert content is not None
     assert isinstance(content, str)
@@ -31,13 +31,13 @@ def test_get_current_content_found(db):
 
 def test_get_current_content_not_found(db):
     """get_current_content returns None for unknown name."""
-    svc = SystemPromptService(db)
+    svc = SystemPromptRepository(db)
     assert svc.get_current_content("nonexistent") is None
 
 
 def test_get_versions_empty_for_unknown_name(db):
     """get_versions returns empty list for unknown prompt name."""
-    svc = SystemPromptService(db)
+    svc = SystemPromptRepository(db)
     versions = svc.get_versions("nonexistent")
     assert versions == []
 
@@ -45,7 +45,7 @@ def test_get_versions_empty_for_unknown_name(db):
 def test_get_versions_newest_first(db, setup_system_prompt_with_versions):
     """get_versions returns versions newest first (by version_number desc)."""
     prompt, created_versions = setup_system_prompt_with_versions
-    svc = SystemPromptService(db)
+    svc = SystemPromptRepository(db)
     versions = svc.get_versions(prompt.name)
     assert len(versions) == 3
     assert versions[0].version_number == 3
@@ -56,7 +56,7 @@ def test_get_versions_newest_first(db, setup_system_prompt_with_versions):
 def test_get_versions_pagination(db, setup_system_prompt_with_versions):
     """get_versions respects skip and limit."""
     prompt, _ = setup_system_prompt_with_versions
-    svc = SystemPromptService(db)
+    svc = SystemPromptRepository(db)
     page1 = svc.get_versions(prompt.name, skip=0, limit=2)
     assert len(page1) == 2
     assert page1[0].version_number == 3
@@ -77,7 +77,7 @@ def test_create_version_first_version(db, faker):
     db.commit()
     db.refresh(prompt)
 
-    svc = SystemPromptService(db)
+    svc = SystemPromptRepository(db)
     new_content = "New markdown content"
     version = svc.create_version(name, new_content, note="First")
 
@@ -95,7 +95,7 @@ def test_create_version_first_version(db, faker):
 def test_create_version_second_version(db, setup_system_prompt):
     """create_version adds new version and updates current."""
     prompt = setup_system_prompt
-    svc = SystemPromptService(db)
+    svc = SystemPromptRepository(db)
     new_content = "Updated system prompt"
     version = svc.create_version(prompt.name, new_content, note="Update")
 
@@ -113,14 +113,14 @@ def test_create_version_second_version(db, setup_system_prompt):
 
 def test_create_version_unknown_name_returns_none(db):
     """create_version returns None when prompt name does not exist."""
-    svc = SystemPromptService(db)
+    svc = SystemPromptRepository(db)
     version = svc.create_version("nonexistent", "content", note="x")
     assert version is None
 
 
 def test_get_system_prompts(db, setup_system_prompt):
     """get_system_prompts returns prompts ordered by name."""
-    svc = SystemPromptService(db)
+    svc = SystemPromptRepository(db)
     prompts = svc.get_system_prompts(skip=0, limit=100)
     assert isinstance(prompts, list)
     names = [p.name for p in prompts]
@@ -131,7 +131,7 @@ def test_get_system_prompts(db, setup_system_prompt):
 def test_get_system_prompt_by_id(db, setup_system_prompt):
     """get_system_prompt_by_id returns the prompt when it exists."""
     prompt = setup_system_prompt
-    svc = SystemPromptService(db)
+    svc = SystemPromptRepository(db)
     found = svc.get_system_prompt_by_id(prompt.id)
     assert found is not None
     assert found.id == prompt.id
@@ -139,7 +139,7 @@ def test_get_system_prompt_by_id(db, setup_system_prompt):
 
 def test_create_prompt(db, faker):
     """create_prompt creates a new prompt with initial version."""
-    svc = SystemPromptService(db)
+    svc = SystemPromptRepository(db)
     name = faker.slug() or "new"
     prompt = svc.create_prompt(name, initial_content="# Hello", note="First")
     assert prompt.id is not None
@@ -150,7 +150,7 @@ def test_create_prompt(db, faker):
 
 def test_create_prompt_duplicate_name_raises(db, setup_system_prompt):
     """create_prompt raises ValueError when name already exists."""
-    svc = SystemPromptService(db)
+    svc = SystemPromptRepository(db)
     with pytest.raises(ValueError, match="already exists"):
         svc.create_prompt(setup_system_prompt.name, initial_content="x")
 
@@ -159,7 +159,7 @@ def test_update_prompt_name(db, setup_system_prompt):
     """update_prompt_name renames the prompt."""
     prompt = setup_system_prompt
     old_name = prompt.name
-    svc = SystemPromptService(db)
+    svc = SystemPromptRepository(db)
     updated = svc.update_prompt_name(old_name, new_name="renamed-prompt")
     assert updated is not None
     assert updated.name == "renamed-prompt"
@@ -169,14 +169,14 @@ def test_update_prompt_name(db, setup_system_prompt):
 
 def test_update_prompt_name_not_found(db):
     """update_prompt_name returns None when prompt does not exist."""
-    svc = SystemPromptService(db)
+    svc = SystemPromptRepository(db)
     assert svc.update_prompt_name("nonexistent", new_name="other") is None
 
 
 def test_delete_prompt(db, setup_system_prompt):
     """delete_prompt removes the prompt and its versions."""
     name = setup_system_prompt.name
-    svc = SystemPromptService(db)
+    svc = SystemPromptRepository(db)
     assert svc.delete_prompt(name) is True
     assert svc.get_system_prompt_by_name(name) is None
     assert svc.get_versions(name) == []
@@ -184,5 +184,5 @@ def test_delete_prompt(db, setup_system_prompt):
 
 def test_delete_prompt_not_found(db):
     """delete_prompt returns False when prompt does not exist."""
-    svc = SystemPromptService(db)
+    svc = SystemPromptRepository(db)
     assert svc.delete_prompt("nonexistent") is False

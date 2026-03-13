@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List
 
 from sqlalchemy.orm import Query, Session as DBSession
 
@@ -11,7 +11,7 @@ from app.schemas.session import MessageCreate
 from uuid import UUID
 
 
-class SessionMessageService:
+class SessionMessageRepository:
     def __init__(self, db: DBSession) -> None:
         self.db = db
 

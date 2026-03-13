@@ -13,11 +13,13 @@ from app.adapters.context_pack_fetcher import ContextPackFetcher, FetchResult
 from app.models.context_source import ContextSource, ContextSourceState
 from app.schemas.context_pack import MergeableContextPack
 from app.utils.metrics import CONTEXT_PACK_PAYLOAD_BYTES, CONTEXT_SYNC_TOTAL
-from app.services.context_merge_service import ContextMergeService
-from app.services.context_snapshot_service import ContextSnapshotService
-from app.services.context_source_service import ContextSourceService
-from app.services.context_source_state_service import ContextSourceStateService
-from app.services.credential_service import CredentialService
+from app.repositories.context_merge_repository import ContextMergeRepository
+from app.repositories.context_snapshot_repository import ContextSnapshotRepository
+from app.repositories.context_source_repository import ContextSourceRepository
+from app.repositories.context_source_state_repository import (
+    ContextSourceStateRepository,
+)
+from app.repositories.credential_repository import CredentialRepository
 
 
 class SyncContextForUserCommand:
@@ -42,13 +44,13 @@ class SyncContextForUserCommand:
             None: If no enabled sources exist (nothing to sync) or if all
                   sources failed (e.g. HTTP 401)
         """
-        source_svc = ContextSourceService(self.db)
-        state_svc = ContextSourceStateService(
-            self.db, context_source_service=source_svc
+        source_svc = ContextSourceRepository(self.db)
+        state_svc = ContextSourceStateRepository(
+            self.db, context_source_repository=source_svc
         )
-        fetcher = ContextPackFetcher(CredentialService(self.db))
-        merge_svc = ContextMergeService()
-        snapshot_svc = ContextSnapshotService(self.db)
+        fetcher = ContextPackFetcher(CredentialRepository(self.db))
+        merge_svc = ContextMergeRepository()
+        snapshot_svc = ContextSnapshotRepository(self.db)
 
         sources = self._get_enabled_sources(source_svc)
         if not sources:
@@ -73,7 +75,7 @@ class SyncContextForUserCommand:
         return user_id
 
     def _get_enabled_sources(
-        self, source_svc: ContextSourceService
+        self, source_svc: ContextSourceRepository
     ) -> List[ContextSource]:
         """Return enabled context sources."""
         return [
@@ -84,7 +86,7 @@ class SyncContextForUserCommand:
         self,
         user_id: UUID,
         sources: List[ContextSource],
-        state_svc: ContextSourceStateService,
+        state_svc: ContextSourceStateRepository,
         fetcher: ContextPackFetcher,
     ) -> tuple[List[MergeableContextPack], bool]:
         """Fetch context packs from all sources and collect successful ones.
@@ -117,7 +119,7 @@ class SyncContextForUserCommand:
         source: ContextSource,
         state: ContextSourceState,
         result: FetchResult,
-        state_svc: ContextSourceStateService,
+        state_svc: ContextSourceStateRepository,
         now: datetime,
     ) -> Optional[MergeableContextPack]:
         """Process fetch result, update state, return pack if successful."""
@@ -144,7 +146,7 @@ class SyncContextForUserCommand:
         source: ContextSource,
         state: ContextSourceState,
         error: str,
-        state_svc: ContextSourceStateService,
+        state_svc: ContextSourceStateRepository,
         now: datetime,
     ) -> None:
         """Handle fetch error: record metric, update state, log."""
@@ -169,7 +171,7 @@ class SyncContextForUserCommand:
         self,
         source: ContextSource,
         state: ContextSourceState,
-        state_svc: ContextSourceStateService,
+        state_svc: ContextSourceStateRepository,
         now: datetime,
     ) -> None:
         """Handle 304 Not Modified: update state for next run."""
@@ -187,7 +189,7 @@ class SyncContextForUserCommand:
         source: ContextSource,
         state: ContextSourceState,
         result: FetchResult,
-        state_svc: ContextSourceStateService,
+        state_svc: ContextSourceStateRepository,
         now: datetime,
     ) -> MergeableContextPack:
         """Handle successful fetch: record metric, update state, return pack."""
@@ -220,8 +222,8 @@ class SyncContextForUserCommand:
         self,
         user_id: UUID,
         packs: List[MergeableContextPack],
-        merge_svc: ContextMergeService,
-        snapshot_svc: ContextSnapshotService,
+        merge_svc: ContextMergeRepository,
+        snapshot_svc: ContextSnapshotRepository,
     ) -> None:
         """Merge packs and store snapshot."""
         merged = merge_svc.merge_packs(packs)

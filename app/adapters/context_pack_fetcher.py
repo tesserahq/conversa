@@ -12,7 +12,7 @@ from pydantic import ValidationError
 from app.models.context_source import ContextSource
 from app.models.context_source import ContextSourceState
 from app.schemas.context_pack import ContextPackResponse, MergeableContextPack
-from app.services.credential_service import CredentialService
+from app.repositories.credential_repository import CredentialRepository
 from app.infra.logging_config import get_logger
 
 logger = get_logger("context_pack_fetcher")
@@ -36,7 +36,7 @@ class FetchResult:
 class ContextPackFetcher:
     """Fetches context packs from a registered source."""
 
-    def __init__(self, credential_service: CredentialService) -> None:
+    def __init__(self, credential_service: CredentialRepository) -> None:
         self._credential_service = credential_service
 
     def fetch(

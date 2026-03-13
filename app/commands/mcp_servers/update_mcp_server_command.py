@@ -12,7 +12,7 @@ from app.events.mcp_server_events import build_mcp_server_updated_event
 from app.mcp.catalog import ToolCatalog
 from app.models.mcp_server import MCPServer
 from app.schemas.mcp_server import MCPServerUpdate
-from app.services.mcp_server_service import MCPServerService
+from app.repositories.mcp_server_repository import MCPServerRepository
 from tessera_sdk.events.nats_router import NatsEventPublisher  # type: ignore[import-untyped]
 
 
@@ -27,7 +27,7 @@ class UpdateMcpServerCommand:
         nats_publisher: Optional[NatsEventPublisher] = None,
     ):
         self.db = db
-        self.mcp_server_service = MCPServerService(db)
+        self.mcp_server_service = MCPServerRepository(db)
         self.nats_publisher = (
             nats_publisher if nats_publisher is not None else NatsEventPublisher()
         )

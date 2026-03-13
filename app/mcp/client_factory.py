@@ -28,7 +28,7 @@ async def client_context(
     """
     Async context manager that yields a FastMCP Client for the given URL and headers.
 
-    Caller is responsible for resolving headers (e.g. via CredentialService).
+    Caller is responsible for resolving headers (e.g. via CredentialRepository).
     """
     safe_headers = _sanitize_headers(headers)
     transport = StreamableHttpTransport(url=url, headers=safe_headers)

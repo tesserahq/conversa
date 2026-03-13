@@ -4,7 +4,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate
-from app.services.user_service import UserService
+from app.repositories.user_repository import UserRepository
 
 
 @pytest.fixture
@@ -29,7 +29,7 @@ def sample_user(db: Session, sample_user_data):
 def test_create_user(db: Session, sample_user_data):
     # Create user
     user_create = UserCreate(**sample_user_data)
-    user = UserService(db).create_user(user_create)
+    user = UserRepository(db).create_user(user_create)
 
     # Assertions
     assert user.id is not None
@@ -49,7 +49,7 @@ def test_create_user(db: Session, sample_user_data):
 
 def test_get_user(db: Session, sample_user):
     # Get user
-    retrieved_user = UserService(db).get_user(sample_user.id)
+    retrieved_user = UserRepository(db).get_user(sample_user.id)
 
     # Assertions
     assert retrieved_user is not None
@@ -59,7 +59,7 @@ def test_get_user(db: Session, sample_user):
 
 def test_get_user_by_email(db: Session, sample_user):
     # Get user by email
-    retrieved_user = UserService(db).get_user_by_email(sample_user.email)
+    retrieved_user = UserRepository(db).get_user_by_email(sample_user.email)
 
     # Assertions
     assert retrieved_user is not None
@@ -69,7 +69,7 @@ def test_get_user_by_email(db: Session, sample_user):
 
 def test_get_users(db: Session, sample_user):
     # Get all users
-    users = UserService(db).get_users()
+    users = UserRepository(db).get_users()
 
     # Assertions
     assert len(users) >= 1
@@ -86,7 +86,7 @@ def test_update_user(db: Session, sample_user):
     user_update = UserUpdate(**update_data)
 
     # Update user
-    updated_user = UserService(db).update_user(sample_user.id, user_update)
+    updated_user = UserRepository(db).update_user(sample_user.id, user_update)
 
     # Assertions
     assert updated_user is not None
@@ -103,7 +103,7 @@ def test_update_user(db: Session, sample_user):
 
 def test_verify_user(db: Session, sample_user):
     # Verify user
-    verified_user = UserService(db).verify_user(sample_user.id)
+    verified_user = UserRepository(db).verify_user(sample_user.id)
 
     # Assertions
     assert verified_user is not None
@@ -113,7 +113,7 @@ def test_verify_user(db: Session, sample_user):
 
 
 def test_delete_user(db: Session, sample_user):
-    user_service = UserService(db)
+    user_service = UserRepository(db)
     # Delete user
     success = user_service.delete_user(sample_user.id)
 
@@ -124,7 +124,7 @@ def test_delete_user(db: Session, sample_user):
 
 
 def test_user_not_found_cases(db: Session):
-    user_service = UserService(db)
+    user_service = UserRepository(db)
     # Test various not found cases
     non_existent_id = uuid4()
 
@@ -147,20 +147,20 @@ def test_user_not_found_cases(db: Session):
 def test_search_users_with_filters(db: Session, sample_user):
     # Search using ilike filter on first name
     filters = {"first_name": {"operator": "ilike", "value": "%test%"}}
-    results = UserService(db).search(filters)
+    results = UserRepository(db).search(filters)
 
     assert isinstance(results, list)
     assert any(user.id == sample_user.id for user in results)
 
     # Search using exact match
     filters = {"email": sample_user.email}
-    results = UserService(db).search(filters)
+    results = UserRepository(db).search(filters)
 
     assert len(results) == 1
     assert results[0].id == sample_user.id
 
     # Search with no match
     filters = {"email": {"operator": "==", "value": "nonexistent@example.com"}}
-    results = UserService(db).search(filters)
+    results = UserRepository(db).search(filters)
 
     assert len(results) == 0

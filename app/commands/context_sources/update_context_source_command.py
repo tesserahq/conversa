@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.events.context_source_events import build_context_source_updated_event
 from app.models.context_source import ContextSource
 from app.schemas.context_source import ContextSourceUpdate
-from app.services.context_source_service import ContextSourceService
+from app.repositories.context_source_repository import ContextSourceRepository
 from tessera_sdk.events.nats_router import NatsEventPublisher  # type: ignore[import-untyped]
 
 
@@ -26,7 +26,7 @@ class UpdateContextSourceCommand:
         nats_publisher: Optional[NatsEventPublisher] = None,
     ):
         self.db = db
-        self.context_source_service = ContextSourceService(db)
+        self.context_source_service = ContextSourceRepository(db)
         self.nats_publisher = (
             nats_publisher if nats_publisher is not None else NatsEventPublisher()
         )

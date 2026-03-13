@@ -71,7 +71,7 @@ class ToolCatalog:
         """
         Return tools for the server. Uses cache unless force_refresh is True.
 
-        Caller must pass MCPServer and pre-resolved headers (e.g. from CredentialService).
+        Caller must pass MCPServer and pre-resolved headers (e.g. from CredentialRepository).
         """
         server_id = mcp_server.server_id
         prefix = mcp_server.tool_prefix or server_id

@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.events.mcp_server_events import build_mcp_server_created_event
 from app.models.mcp_server import MCPServer
 from app.schemas.mcp_server import MCPServerCreate
-from app.services.mcp_server_service import MCPServerService
+from app.repositories.mcp_server_repository import MCPServerRepository
 from tessera_sdk.events.nats_router import NatsEventPublisher  # type: ignore[import-untyped]
 
 
@@ -26,7 +26,7 @@ class CreateMcpServerCommand:
         nats_publisher: Optional[NatsEventPublisher] = None,
     ):
         self.db = db
-        self.mcp_server_service = MCPServerService(db)
+        self.mcp_server_service = MCPServerRepository(db)
         self.nats_publisher = (
             nats_publisher if nats_publisher is not None else NatsEventPublisher()
         )
