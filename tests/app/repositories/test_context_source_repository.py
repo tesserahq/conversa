@@ -5,12 +5,12 @@ from uuid import uuid4
 import pytest
 
 from app.schemas.context_source import ContextSourceCreate, ContextSourceUpdate
-from app.services.context_source_service import ContextSourceService
+from app.repositories.context_source_repository import ContextSourceRepository
 
 
 def test_create_context_source(db, setup_credential):
     """Create a context source and verify it is stored."""
-    svc = ContextSourceService(db)
+    svc = ContextSourceRepository(db)
     data = ContextSourceCreate(
         source_id="linden-api",
         display_name="Linden API",
@@ -30,7 +30,7 @@ def test_create_context_source(db, setup_credential):
 
 def test_create_context_source_duplicate_source_id_fails(db, setup_context_source):
     """Creating with duplicate source_id raises ValueError."""
-    svc = ContextSourceService(db)
+    svc = ContextSourceRepository(db)
     data = ContextSourceCreate(
         source_id=setup_context_source.source_id,
         display_name="Other",
@@ -42,7 +42,7 @@ def test_create_context_source_duplicate_source_id_fails(db, setup_context_sourc
 
 def test_get_context_source(db, setup_context_source):
     """Fetch context source by ID."""
-    svc = ContextSourceService(db)
+    svc = ContextSourceRepository(db)
     found = svc.get_context_source(setup_context_source.id)
     assert found is not None
     assert found.id == setup_context_source.id
@@ -51,7 +51,7 @@ def test_get_context_source(db, setup_context_source):
 
 def test_get_context_source_by_source_id(db, setup_context_source):
     """Fetch context source by source_id string."""
-    svc = ContextSourceService(db)
+    svc = ContextSourceRepository(db)
     found = svc.get_context_source_by_source_id(setup_context_source.source_id)
     assert found is not None
     assert found.id == setup_context_source.id
@@ -59,14 +59,14 @@ def test_get_context_source_by_source_id(db, setup_context_source):
 
 def test_get_context_source_not_found(db):
     """Fetch non-existent context source returns None."""
-    svc = ContextSourceService(db)
+    svc = ContextSourceRepository(db)
     found = svc.get_context_source(uuid4())
     assert found is None
 
 
 def test_update_context_source(db, setup_context_source):
     """Update context source fields."""
-    svc = ContextSourceService(db)
+    svc = ContextSourceRepository(db)
     data = ContextSourceUpdate(
         display_name="Updated Display",
         poll_interval_seconds=7200,
@@ -79,7 +79,7 @@ def test_update_context_source(db, setup_context_source):
 
 def test_delete_context_source(db, setup_context_source):
     """Soft delete context source."""
-    svc = ContextSourceService(db)
+    svc = ContextSourceRepository(db)
     result = svc.delete_context_source(setup_context_source.id)
     assert result is True
     found = svc.get_context_source(setup_context_source.id)
@@ -88,7 +88,7 @@ def test_delete_context_source(db, setup_context_source):
 
 def test_search_context_sources(db, setup_context_source):
     """Search context sources by filter."""
-    svc = ContextSourceService(db)
+    svc = ContextSourceRepository(db)
     results = svc.search({"enabled": True})
     assert len(results) >= 1
     ids = [s.id for s in results]

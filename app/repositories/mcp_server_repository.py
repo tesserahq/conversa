@@ -9,11 +9,11 @@ from sqlalchemy.orm import Query, Session
 
 from app.models.mcp_server import MCPServer
 from app.schemas.mcp_server import MCPServerCreate, MCPServerUpdate
-from app.services.soft_delete_service import SoftDeleteService
+from app.repositories.soft_delete_repository import SoftDeleteRepository
 from app.utils.db.filtering import apply_filters
 
 
-class MCPServerService(SoftDeleteService[MCPServer]):
+class MCPServerRepository(SoftDeleteRepository[MCPServer]):
     """Manages MCP servers for the MCP registry."""
 
     def __init__(self, db: Session) -> None:
@@ -49,7 +49,7 @@ class MCPServerService(SoftDeleteService[MCPServer]):
         """Return enabled MCP servers, ordered by server_id."""
         return (
             self.db.query(MCPServer)
-            .filter(MCPServer.enabled == True)
+            .filter(MCPServer.enabled.is_(True))
             .order_by(MCPServer.server_id)
             .all()
         )

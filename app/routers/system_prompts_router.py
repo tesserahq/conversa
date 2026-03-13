@@ -22,7 +22,7 @@ from app.schemas.system_prompt import (
     SystemPromptVersionCreate,
     SystemPromptVersionRead,
 )
-from app.services.system_prompt_service import SystemPromptService
+from app.repositories.system_prompt_repository import SystemPromptRepository
 from tessera_sdk.utils.auth import get_current_user
 
 router = APIRouter(
@@ -54,7 +54,7 @@ def list_system_prompts(
     db: Session = Depends(get_db),
 ) -> Page[SystemPromptRead]:
     """List all system prompts with pagination."""
-    svc = SystemPromptService(db)
+    svc = SystemPromptRepository(db)
     query = svc.get_system_prompts_query()
     return paginate(query, params=params)
 
@@ -90,7 +90,7 @@ def get_system_prompt(
     db: Session = Depends(get_db),
 ) -> SystemPromptRead:
     """Get a system prompt by name."""
-    svc = SystemPromptService(db)
+    svc = SystemPromptRepository(db)
     prompt = svc.get_system_prompt_by_name(name)
     if prompt is None:
         raise HTTPException(status_code=404, detail="System prompt not found")
@@ -150,7 +150,7 @@ def get_system_prompt_current(
     db: Session = Depends(get_db),
 ) -> SystemPromptCurrentRead:
     """Return the current system prompt content and version info."""
-    svc = SystemPromptService(db)
+    svc = SystemPromptRepository(db)
     result = svc.get_current_version_display(name)
     if result is None:
         raise HTTPException(status_code=404, detail="System prompt not found")
@@ -175,7 +175,7 @@ def list_system_prompt_versions(
     db: Session = Depends(get_db),
 ) -> Page[SystemPromptVersionRead]:
     """List version history for the given system prompt, newest first."""
-    svc = SystemPromptService(db)
+    svc = SystemPromptRepository(db)
     query = svc.get_versions_query(name)
     return paginate(query, params=params)
 
@@ -193,7 +193,7 @@ def create_system_prompt_version(
     db: Session = Depends(get_db),
 ) -> SystemPromptVersionRead:
     """Create a new version and set it as the current system prompt."""
-    svc = SystemPromptService(db)
+    svc = SystemPromptRepository(db)
     version = svc.create_version(name, content=data.content, note=data.note)
     if version is None:
         raise HTTPException(status_code=404, detail="System prompt not found")

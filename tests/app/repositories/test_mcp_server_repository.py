@@ -3,12 +3,12 @@
 import pytest
 
 from app.schemas.mcp_server import MCPServerCreate, MCPServerUpdate
-from app.services.mcp_server_service import MCPServerService
+from app.repositories.mcp_server_repository import MCPServerRepository
 
 
 def test_create_mcp_server_with_nullable_credential_id(db):
     """Create MCP server with credential_id=None."""
-    svc = MCPServerService(db)
+    svc = MCPServerRepository(db)
     created = svc.create_mcp_server(
         MCPServerCreate(
             server_id="linden",
@@ -29,7 +29,7 @@ def test_create_mcp_server_with_nullable_credential_id(db):
 
 def test_create_mcp_server_duplicate_server_id_fails(db):
     """Creating duplicate server_id raises ValueError."""
-    svc = MCPServerService(db)
+    svc = MCPServerRepository(db)
     payload = MCPServerCreate(
         server_id="linden",
         name="Linden MCP",
@@ -42,7 +42,7 @@ def test_create_mcp_server_duplicate_server_id_fails(db):
 
 def test_update_mcp_server_can_set_credential_id_to_none(db, setup_credential):
     """Updating with credential_id=None clears credential binding."""
-    svc = MCPServerService(db)
+    svc = MCPServerRepository(db)
     created = svc.create_mcp_server(
         MCPServerCreate(
             server_id="linden",
@@ -65,7 +65,7 @@ def test_update_mcp_server_can_set_credential_id_to_none(db, setup_credential):
 
 def test_get_enabled_servers_returns_only_enabled(db):
     """get_enabled_servers returns only enabled servers, ordered by server_id."""
-    svc = MCPServerService(db)
+    svc = MCPServerRepository(db)
     svc.create_mcp_server(
         MCPServerCreate(
             server_id="alpha",

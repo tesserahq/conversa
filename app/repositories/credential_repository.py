@@ -16,8 +16,8 @@ from app.core.credentials import (
 from app.constants.credentials import CredentialType
 from app.models.credential import Credential
 from app.schemas.credential import CredentialCreate, CredentialRead, CredentialUpdate
-from app.services.mcp_delegated_token_service import MCPDelegatedTokenService
-from app.services.soft_delete_service import SoftDeleteService
+from app.repositories.mcp_delegated_token_repository import MCPDelegatedTokenRepository
+from app.repositories.soft_delete_repository import SoftDeleteRepository
 from app.utils.db.filtering import apply_filters
 
 
@@ -31,7 +31,7 @@ def _get_default_m2m_token() -> Optional[str]:
         return None
 
 
-class CredentialService(SoftDeleteService[Credential]):
+class CredentialRepository(SoftDeleteRepository[Credential]):
     """Manages credentials for context source auth."""
 
     def __init__(
@@ -39,13 +39,13 @@ class CredentialService(SoftDeleteService[Credential]):
         db: Session,
         *,
         m2m_token_provider: Optional[Callable[[], Optional[str]]] = None,
-        delegated_token_service: Optional[MCPDelegatedTokenService] = None,
+        delegated_token_service: Optional[MCPDelegatedTokenRepository] = None,
     ) -> None:
         super().__init__(db, Credential)
         self._m2m_token_provider = m2m_token_provider or _get_default_m2m_token
         self._delegated_token_service = (
             delegated_token_service
-            or MCPDelegatedTokenService(m2m_token_provider=self._m2m_token_provider)
+            or MCPDelegatedTokenRepository(m2m_token_provider=self._m2m_token_provider)
         )
 
     def get_credential(self, credential_id: UUID) -> Optional[Credential]:

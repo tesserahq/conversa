@@ -8,11 +8,11 @@ from app.adapters.mcp_toolset import MCPToolset
 from app.channels.envelope import InboundMessage, OutboundMessage
 from app.config import get_settings
 from app.core.linker import Linker
-from app.services.context_snapshot_service import ContextSnapshotService
-from app.services.mcp_tool_catalog_service import MCPToolCatalogService
-from app.services.mcp_tool_executor import MCPToolExecutor
+from app.repositories.context_snapshot_repository import ContextSnapshotRepository
+from app.repositories.mcp_tool_catalog_repository import MCPToolCatalogRepository
+from app.mcp.tool_executor import MCPToolExecutor
 from app.utils.metrics import CONTEXT_SNAPSHOT_AGE_SECONDS
-from app.services.session_manager import SessionManager
+from app.repositories.session_manager import SessionManager
 from app.tasks.context_sync_task import sync_context_for_user_task
 from app.utils.db.db_session_helper import db_session
 from app.workers.llm import LLMRunner, build_llm_runner_from_env
@@ -67,8 +67,8 @@ class Router:
         """Load latest context snapshot for the user; record metrics or trigger sync if missing."""
         if not user_id:
             return None
-        snapshot_svc = ContextSnapshotService(db)
-        snapshot = snapshot_svc.get_latest_snapshot(user_id)
+        snapshot_repo = ContextSnapshotRepository(db)
+        snapshot = snapshot_repo.get_latest_snapshot(user_id)
         if snapshot:
             age_seconds = (
                 datetime.now(timezone.utc) - snapshot.generated_at
@@ -84,8 +84,8 @@ class Router:
         """Build MCP toolsets for the user when MCP tools are enabled."""
         if not get_settings().mcp_tools_enabled:
             return None
-        catalog_svc = MCPToolCatalogService(db)
-        mcp_tools = await catalog_svc.get_tools_for_request(user_id=user_id)
+        catalog_repo = MCPToolCatalogRepository(db)
+        mcp_tools = await catalog_repo.get_tools_for_request(user_id=user_id)
         if not mcp_tools:
             return None
         executor = MCPToolExecutor(db)

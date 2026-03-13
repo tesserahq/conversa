@@ -4,7 +4,7 @@ from tessera_sdk.identies.schemas.user_response import UserResponse
 from tessera_sdk.utils.m2m_token import M2MTokenClient
 from tessera_sdk.utils.cache import Cache
 from app.schemas.user import User
-from app.services.user_service import UserService
+from app.repositories.user_repository import UserRepository
 from app.utils.db.db_session_helper import db_session
 from uuid import UUID
 from app.schemas.user import UserOnboard
@@ -73,7 +73,7 @@ class Linker:
             User: The user
         """
         with db_session() as db:
-            user_service = UserService(db=db)
+            user_service = UserRepository(db=db)
             # If the user doesn't exist, we need to fetch it from Identies
             user = user_service.get_user(user_id)
             if user:

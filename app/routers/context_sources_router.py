@@ -25,7 +25,7 @@ from app.schemas.context_source import (
     ContextSourceRead,
     ContextSourceUpdate,
 )
-from app.services.context_source_service import ContextSourceService
+from app.repositories.context_source_repository import ContextSourceRepository
 from tessera_sdk.utils.auth import get_current_user
 from app.infra.logging_config import get_logger
 
@@ -84,7 +84,7 @@ def list_context_sources(
     db: Session = Depends(get_db),
 ) -> Page[ContextSourceRead]:
     """List all context sources with pagination."""
-    svc = ContextSourceService(db)
+    svc = ContextSourceRepository(db)
     query = svc.get_context_sources_query()
     return paginate(query, params=params)
 

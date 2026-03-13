@@ -9,11 +9,11 @@ from sqlalchemy.orm import Query, Session
 
 from app.models.context_source import ContextSource
 from app.schemas.context_source import ContextSourceCreate, ContextSourceUpdate
-from app.services.soft_delete_service import SoftDeleteService
+from app.repositories.soft_delete_repository import SoftDeleteRepository
 from app.utils.db.filtering import apply_filters
 
 
-class ContextSourceService(SoftDeleteService[ContextSource]):
+class ContextSourceRepository(SoftDeleteRepository[ContextSource]):
     """Manages context sources for the Source Registry."""
 
     def __init__(self, db: Session) -> None:

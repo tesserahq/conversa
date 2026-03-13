@@ -10,13 +10,13 @@ from sqlalchemy.orm import Session
 from app.mcp.catalog import ToolCatalog
 from app.models.mcp_server import MCPServer
 from app.schemas.mcp_server import MCPToolsRefreshResponse
-from app.services.credential_service import CredentialService
+from app.repositories.credential_repository import CredentialRepository
 
 
 class RefreshMcpServerToolsCommand:
     """
     Command to force-refresh tools from an MCP server.
-    Uses CredentialService for headers and ToolCatalog for fetching.
+    Uses CredentialRepository for headers and ToolCatalog for fetching.
     """
 
     def __init__(self, db: Session) -> None:
@@ -40,7 +40,7 @@ class RefreshMcpServerToolsCommand:
         Raises:
             Exception: When tools cannot be fetched from the MCP server.
         """
-        credential_svc = CredentialService(self.db)
+        credential_svc = CredentialRepository(self.db)
         headers = credential_svc.apply_credentials_with_context(
             credential_id=cast(Optional[UUID], mcp_server.credential_id),
             user_id=user_id,

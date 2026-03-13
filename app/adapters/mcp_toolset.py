@@ -12,7 +12,7 @@ from pydantic_ai.toolsets import AbstractToolset
 from pydantic_ai.toolsets.abstract import ToolsetTool
 
 from app.schemas.mcp_tool import MCPCatalogTool
-from app.services.mcp_tool_executor import MCPToolExecutor
+from app.mcp.tool_executor import MCPToolExecutor
 
 # SchemaValidator that accepts any dict; MCP tools validate on the server side.
 _ARGS_VALIDATOR = TypeAdapter(dict[str, Any]).validator

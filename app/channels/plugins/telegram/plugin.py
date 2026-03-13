@@ -13,10 +13,7 @@ from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filte
 from app.channels.base import ChannelCapabilities, ChannelMeta
 from app.channels.envelope import InboundMessage, OutboundMessage
 from app.core.app_state import state
-from app.db import SessionLocal
 from app.infra.logging_config import get_logger
-from app.services.session_manager import SessionManager
-from app.utils.db.db_session_helper import db_session
 from .config import TelegramConfig
 from telegram.request import HTTPXRequest
 

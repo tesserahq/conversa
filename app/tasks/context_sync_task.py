@@ -5,7 +5,9 @@ from __future__ import annotations
 from uuid import UUID
 
 from app.commands.sync_context_for_user_command import SyncContextForUserCommand
-from app.services.context_source_state_service import ContextSourceStateService
+from app.repositories.context_source_state_repository import (
+    ContextSourceStateRepository,
+)
 from app.infra.celery_app import celery_app
 from app.infra.logging_config import get_logger
 from app.utils.db.db_session_helper import db_session
@@ -38,7 +40,7 @@ def sync_context_all_due_task(limit: int = 500) -> int:
     One task per user (debounced).
     """
     with db_session() as db:
-        state_svc = ContextSourceStateService(db)
+        state_svc = ContextSourceStateRepository(db)
         pairs = state_svc.get_due_user_source_pairs(limit=limit)
 
     user_ids = {str(u.id) for _, u in pairs}

@@ -3,7 +3,7 @@
 from types import SimpleNamespace
 from uuid import uuid4
 
-from app.services.mcp_delegated_token_service import MCPDelegatedTokenService
+from app.repositories.mcp_delegated_token_repository import MCPDelegatedTokenRepository
 
 
 class _FakeCache:
@@ -33,11 +33,11 @@ def test_get_access_token_returns_cached_token(monkeypatch):
             raise AssertionError("exchange_token should not be called on cache hit")
 
     monkeypatch.setattr(
-        "app.services.mcp_delegated_token_service.IdentiesClient",
+        "app.repositories.mcp_delegated_token_repository.IdentiesClient",
         _FailingIdentiesClient,
     )
 
-    service = MCPDelegatedTokenService(m2m_token_provider=lambda: "m2m")
+    service = MCPDelegatedTokenRepository(m2m_token_provider=lambda: "m2m")
     service._cache = _FakeCache()
     user_id = uuid4()
     key = service._cache_key(user_id, "linden", "mcp:tools:execute")
@@ -75,11 +75,11 @@ def test_get_access_token_miss_calls_exchange(monkeypatch):
             )
 
     monkeypatch.setattr(
-        "app.services.mcp_delegated_token_service.IdentiesClient",
+        "app.repositories.mcp_delegated_token_repository.IdentiesClient",
         _FakeIdentiesClient,
     )
 
-    service = MCPDelegatedTokenService(m2m_token_provider=lambda: "m2m-token")
+    service = MCPDelegatedTokenRepository(m2m_token_provider=lambda: "m2m-token")
     service._cache = _FakeCache()
     user_id = uuid4()
 
@@ -108,11 +108,11 @@ def test_get_access_token_force_refresh_bypasses_cache(monkeypatch):
             )
 
     monkeypatch.setattr(
-        "app.services.mcp_delegated_token_service.IdentiesClient",
+        "app.repositories.mcp_delegated_token_repository.IdentiesClient",
         _FakeIdentiesClient,
     )
 
-    service = MCPDelegatedTokenService(m2m_token_provider=lambda: "m2m-token")
+    service = MCPDelegatedTokenRepository(m2m_token_provider=lambda: "m2m-token")
     service._cache = _FakeCache()
     user_id = uuid4()
 

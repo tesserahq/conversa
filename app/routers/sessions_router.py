@@ -13,8 +13,9 @@ from sqlalchemy.orm import Session
 from app.auth.rbac import build_rbac_dependencies
 from app.db import get_db
 from app.schemas.session import MessageRead, SessionListRow, SessionRead
-from app.services.session_manager import SessionManager
-from app.services.session_service import SessionService
+from app.repositories.session_manager import SessionManager
+from app.repositories.session_repository import SessionRepository
+from app.repositories.session_message_repository import SessionMessageRepository
 from tessera_sdk.utils.auth import get_current_user
 
 sessions_router = APIRouter(prefix="/sessions", tags=["Session"])
@@ -75,7 +76,7 @@ def get_session(
     db: Session = Depends(get_db),
 ) -> SessionRead:
     """Get a session by ID."""
-    svc = SessionService(db)
+    svc = SessionRepository(db)
     session = svc.get_session(session_id)
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -91,13 +92,11 @@ def list_session_messages(
     db: Session = Depends(get_db),
 ) -> Page[MessageRead]:
     """List messages for a session with pagination."""
-    svc = SessionService(db)
+    svc = SessionRepository(db)
     session = svc.get_session(session_id)
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found")
-    from app.services.session_message_service import SessionMessageService
-
-    msg_svc = SessionMessageService(db)
+    msg_svc = SessionMessageRepository(db)
     query = msg_svc.get_messages_query(session_id)
     return paginate(query, params=params)
 
@@ -110,7 +109,7 @@ def reset_session(
     db: Session = Depends(get_db),
 ) -> SessionRead:
     """Reset a session (new session id, same key)."""
-    svc = SessionService(db)
+    svc = SessionRepository(db)
     session = svc.get_session(session_id)
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -128,7 +127,7 @@ def compact_session(
     db: Session = Depends(get_db),
 ) -> dict:
     """Compact older messages into a summary (stub summarizer)."""
-    svc = SessionService(db)
+    svc = SessionRepository(db)
     session = svc.get_session(session_id)
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found")

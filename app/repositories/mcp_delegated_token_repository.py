@@ -20,7 +20,7 @@ def _default_m2m_token_provider() -> Optional[str]:
     return M2MTokenClient().get_token_sync().access_token
 
 
-class MCPDelegatedTokenService:
+class MCPDelegatedTokenRepository:
     """Retrieves and caches delegated tokens for MCP requests."""
 
     def __init__(

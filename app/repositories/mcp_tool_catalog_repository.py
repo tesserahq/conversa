@@ -10,17 +10,17 @@ from sqlalchemy.orm import Session
 from app.infra.logging_config import get_logger
 from app.mcp.catalog import ToolCatalog
 from app.schemas.mcp_tool import MCPCatalogTool
-from app.services.credential_service import CredentialService
-from app.services.mcp_server_service import MCPServerService
+from app.repositories.credential_repository import CredentialRepository
+from app.repositories.mcp_server_repository import MCPServerRepository
 
 logger = get_logger(__name__)
 
 
-class MCPToolCatalogService:
+class MCPToolCatalogRepository:
     """
     Loads tools from all enabled MCP servers for a given request.
 
-    Uses MCPServerService.get_enabled_servers(), CredentialService for auth headers,
+    Uses MCPServerRepository.get_enabled_servers(), CredentialRepository for auth headers,
     and ToolCatalog for cached tool fetching per server.
     """
 
@@ -38,8 +38,8 @@ class MCPToolCatalogService:
         Resolves auth headers per server (credential-driven) and fetches tools
         via ToolCatalog (cached). Per-server failures are logged and skipped.
         """
-        mcp_svc = MCPServerService(self._db)
-        cred_svc = CredentialService(self._db)
+        mcp_svc = MCPServerRepository(self._db)
+        cred_svc = CredentialRepository(self._db)
         catalog = ToolCatalog.new()
 
         servers = mcp_svc.get_enabled_servers()

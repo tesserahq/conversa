@@ -15,7 +15,7 @@ from app.schemas.context_pack import (
 )
 
 
-class ContextMergeService:
+class ContextMergeRepository:
     """Merges context packs using priority-winner for facts, union for pointers/recents."""
 
     def merge_packs(self, packs: List[MergeableContextPack]) -> MergedContextPayload:

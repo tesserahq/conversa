@@ -11,8 +11,8 @@ from sqlalchemy.orm import Session
 
 from app.infra.logging_config import get_logger
 from app.mcp.client_factory import client_context
-from app.services.credential_service import CredentialService
-from app.services.mcp_server_service import MCPServerService
+from app.repositories.credential_repository import CredentialRepository
+from app.repositories.mcp_server_repository import MCPServerRepository
 
 logger = get_logger(__name__)
 
@@ -38,7 +38,7 @@ class MCPToolExecutor:
     """
     Executes call_tool(original_name, args) against an MCP server.
 
-    Enforces timeout, resolves auth via CredentialService, and maps errors
+    Enforces timeout, resolves auth via CredentialRepository, and maps errors
     to structured responses for the LLM.
     """
 
@@ -67,8 +67,8 @@ class MCPToolExecutor:
         Returns:
             JSON-serializable result for the LLM, or error dict on failure.
         """
-        mcp_svc = MCPServerService(self._db)
-        cred_svc = CredentialService(self._db)
+        mcp_svc = MCPServerRepository(self._db)
+        cred_svc = CredentialRepository(self._db)
 
         server = mcp_svc.get_mcp_server_by_server_id(server_id)
         if server is None:

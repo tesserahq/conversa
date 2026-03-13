@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.events.system_prompt_events import build_system_prompt_deleted_event
 from app.models.system_prompt import SystemPrompt
-from app.services.system_prompt_service import SystemPromptService
+from app.repositories.system_prompt_repository import SystemPromptRepository
 from tessera_sdk.events.nats_router import NatsEventPublisher  # type: ignore[import-untyped]
 
 
@@ -25,7 +25,7 @@ class DeleteSystemPromptCommand:
         nats_publisher: Optional[NatsEventPublisher] = None,
     ):
         self.db = db
-        self.system_prompt_service = SystemPromptService(db)
+        self.system_prompt_service = SystemPromptRepository(db)
         self.nats_publisher = (
             nats_publisher if nats_publisher is not None else NatsEventPublisher()
         )

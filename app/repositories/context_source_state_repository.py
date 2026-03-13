@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import List, Optional, Tuple
 from uuid import UUID
 
@@ -11,23 +11,22 @@ from sqlalchemy.orm import Session
 from app.models.context_source import ContextSource
 from app.models.context_source import ContextSourceState
 from app.models.user import User
-from app.services.context_source_service import ContextSourceService
-from app.services.soft_delete_service import SoftDeleteService
-from app.services.user_service import UserService
+from app.repositories.context_source_repository import ContextSourceRepository
+from app.repositories.user_repository import UserRepository
 
 
-class ContextSourceStateService:
+class ContextSourceStateRepository:
     """Manages per-source, per-user sync state for context pack sync."""
 
     def __init__(
         self,
         db: Session,
-        context_source_service: Optional[ContextSourceService] = None,
-        user_service: Optional[UserService] = None,
+        context_source_repository: Optional[ContextSourceRepository] = None,
+        user_repository: Optional[UserRepository] = None,
     ) -> None:
         self._db = db
-        self._source_svc = context_source_service or ContextSourceService(db)
-        self._user_svc = user_service or UserService(db)
+        self._source_svc = context_source_repository or ContextSourceRepository(db)
+        self._user_svc = user_repository or UserRepository(db)
 
     def get_or_create_state(
         self,
@@ -98,7 +97,6 @@ class ContextSourceStateService:
             if s.enabled and s.deleted_at is None
         ]
         users = self._user_svc.get_users(skip=0, limit=1000)
-        users_by_id = {u.id: u for u in users}
 
         result: List[Tuple[ContextSource, User]] = []
         seen: set[Tuple[UUID, UUID]] = set()

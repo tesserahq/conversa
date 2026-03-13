@@ -19,7 +19,7 @@ from app.schemas.credential import (
     CredentialTypeInfo,
     CredentialUpdate,
 )
-from app.services.credential_service import CredentialService
+from app.repositories.credential_repository import CredentialRepository
 from tessera_sdk.utils.auth import get_current_user
 
 router = APIRouter(
@@ -57,7 +57,7 @@ def list_credentials(
     db: Session = Depends(get_db),
 ) -> Page[CredentialRead]:
     """List all credentials with pagination."""
-    svc = CredentialService(db)
+    svc = CredentialRepository(db)
     query = svc.get_credentials_query()
     page = paginate(query, params=params)
     items = [svc.to_credential_read(c) for c in page.items]
@@ -77,7 +77,7 @@ def create_credential(
         data,
         created_by_id=getattr(_current_user, "id", None),
     )
-    svc = CredentialService(db)
+    svc = CredentialRepository(db)
     return svc.to_credential_read(credential)
 
 
@@ -89,7 +89,7 @@ def get_credential(
     db: Session = Depends(get_db),
 ) -> CredentialRead:
     """Get a credential by ID."""
-    svc = CredentialService(db)
+    svc = CredentialRepository(db)
     credential = svc.get_credential(credential_id)
     if credential is None:
         raise HTTPException(status_code=404, detail="Credential not found")
@@ -108,7 +108,7 @@ def reveal_credential_fields(
     db: Session = Depends(get_db),
 ) -> CredentialFieldsReveal:
     """Return decrypted credential field values. Use only when you need to verify or edit stored data."""
-    svc = CredentialService(db)
+    svc = CredentialRepository(db)
     credential = svc.get_credential(credential_id)
     if credential is None:
         raise HTTPException(status_code=404, detail="Credential not found")
@@ -130,7 +130,7 @@ def update_credential(
     db: Session = Depends(get_db),
 ) -> CredentialRead:
     """Update a credential."""
-    svc = CredentialService(db)
+    svc = CredentialRepository(db)
     credential = svc.update_credential(credential_id, data)
     if credential is None:
         raise HTTPException(status_code=404, detail="Credential not found")
@@ -145,6 +145,6 @@ def delete_credential(
     db: Session = Depends(get_db),
 ) -> None:
     """Soft delete a credential."""
-    svc = CredentialService(db)
+    svc = CredentialRepository(db)
     if not svc.delete_credential(credential_id):
         raise HTTPException(status_code=404, detail="Credential not found")
