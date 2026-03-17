@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.events.context_source_events import build_context_source_deleted_event
 from app.models.context_source import ContextSource
 from app.repositories.context_source_repository import ContextSourceRepository
-from tessera_sdk.events.nats_router import NatsEventPublisher  # type: ignore[import-untyped]
+from tessera_sdk.infra.events.nats_router import NatsEventPublisher  # type: ignore[import-untyped]
 
 
 class DeleteContextSourceCommand:

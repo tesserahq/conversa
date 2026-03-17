@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.infra.logging_config import get_logger
 from app.mcp.catalog import ToolCatalog
 from app.schemas.mcp_tool import MCPCatalogTool
-from app.repositories.credential_repository import CredentialRepository
+from app.repositories.credential_applier import CredentialApplier
 from app.repositories.mcp_server_repository import MCPServerRepository
 
 logger = get_logger(__name__)
@@ -39,7 +39,7 @@ class MCPToolCatalogRepository:
         via ToolCatalog (cached). Per-server failures are logged and skipped.
         """
         mcp_svc = MCPServerRepository(self._db)
-        cred_svc = CredentialRepository(self._db)
+        cred_svc = CredentialApplier(self._db)
         catalog = ToolCatalog.new()
 
         servers = mcp_svc.get_enabled_servers()
@@ -47,10 +47,9 @@ class MCPToolCatalogRepository:
 
         for server in servers:
             try:
-                headers = cred_svc.apply_credentials_with_context(
-                    credential_id=cast(Optional[UUID], server.credential_id),
+                headers = cred_svc.apply_for_user(
+                    cast(Optional[UUID], server.credential_id),
                     user_id=user_id,
-                    context=None,
                 )
                 tools = await catalog.get_tools(server, headers)
                 all_tools.extend(tools)

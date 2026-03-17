@@ -6,7 +6,7 @@ from typing import Any, List, Optional
 
 from pydantic_ai import Agent
 from pydantic_ai.models.openai import OpenAIChatModel
-from pydantic_ai.providers.litellm import LiteLLMProvider
+from pydantic_ai.providers.openai import OpenAIProvider
 
 from app.channels.envelope import InboundMessage
 from app.config import get_settings
@@ -102,7 +102,7 @@ class LLMRunner:
         api_base: Optional[str] = None,
         system_prompt: Optional[str] = None,
     ) -> None:
-        provider = LiteLLMProvider(api_key=api_key, api_base=api_base)
+        provider = OpenAIProvider(api_key=api_key)
         model = OpenAIChatModel(model_name, provider=provider)
         logger.info(f"Initializing LLM runner with model {model_name}")
         self._system_prompt = system_prompt or ""
@@ -135,22 +135,20 @@ class LLMRunner:
 def build_llm_runner_from_env() -> LLMRunner:
     settings = get_settings()
     logger.info(
-        "LLM runner config: model=%s, api_key=%s, api_base=%s",
+        "LLM runner config: model=%s, api_key=%s",
         settings.llm_model,
-        "set" if settings.litellm_api_key else "not set",
-        settings.litellm_api_base or "(default)",
+        "set" if settings.llm_api_key else "not set",
     )
-    if not settings.litellm_api_key:
+    if not settings.llm_api_key:
         logger.warning(
-            "LITELLM_API_KEY is not set; set it to a valid OpenAI or LiteLLM API key to avoid 401 errors."
+            "LLM_API_KEY is not set; set it to a valid OpenAI API key to avoid 401 errors."
         )
 
     system_prompt = _get_system_prompt()
 
     return LLMRunner(
         model_name=settings.llm_model,
-        api_key=settings.litellm_api_key,
-        api_base=settings.litellm_api_base,
+        api_key=settings.llm_api_key,
         system_prompt=system_prompt,
     )
 

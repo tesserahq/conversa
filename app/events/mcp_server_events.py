@@ -8,7 +8,7 @@ from uuid import UUID
 
 from app.models.mcp_server import MCPServer as MCPServerModel
 from app.schemas.mcp_server import MCPServerRead as MCPServerSchema
-from tessera_sdk.events.event import Event, event_source, event_type  # type: ignore[import-untyped]
+from tessera_sdk.infra.events.event import Event, event_source, event_type  # type: ignore[import-untyped]
 
 # MCP server events
 MCP_SERVER_CREATED = "mcp_server.created"

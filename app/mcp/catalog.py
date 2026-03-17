@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from tessera_sdk.utils.cache import Cache  # type: ignore[import-untyped]
+from tessera_sdk.infra.cache import Cache
 
 from app.mcp.client_factory import client_context
 from app.models.mcp_server import MCPServer

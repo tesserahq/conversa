@@ -23,7 +23,7 @@ from app.schemas.system_prompt import (
     SystemPromptVersionRead,
 )
 from app.repositories.system_prompt_repository import SystemPromptRepository
-from tessera_sdk.utils.auth import get_current_user
+from tessera_sdk.server.dependencies.auth import get_current_user
 
 router = APIRouter(
     prefix="/system-prompts",

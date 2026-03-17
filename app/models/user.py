@@ -1,6 +1,6 @@
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy import Index, text
-from tessera_sdk.models import UserMixin
+from tessera_sdk.domain.models.user import UserMixin
 
 from app.models.mixins import TimestampMixin, SoftDeleteMixin
 from app.db import Base

@@ -5,7 +5,7 @@ from app.schemas.user import UserOnboard
 from app.repositories.user_repository import UserRepository
 from app.models.user import User
 from app.events.user_events import build_user_created_event
-from tessera_sdk.events.nats_router import NatsEventPublisher
+from tessera_sdk.infra.events.nats_router import NatsEventPublisher
 
 
 class OnboardUserCommand:

@@ -13,7 +13,7 @@ from app.schemas.system import (
     ExternalServicesGroup,
 )
 from app.config import get_settings
-from tessera_sdk.utils.auth import get_current_user
+from tessera_sdk.server.dependencies.auth import get_current_user
 
 router = APIRouter(
     prefix="/system",

@@ -12,7 +12,7 @@ from app.events.mcp_server_events import build_mcp_server_deleted_event
 from app.mcp.catalog import ToolCatalog
 from app.models.mcp_server import MCPServer
 from app.repositories.mcp_server_repository import MCPServerRepository
-from tessera_sdk.events.nats_router import NatsEventPublisher  # type: ignore[import-untyped]
+from tessera_sdk.infra.events.nats_router import NatsEventPublisher  # type: ignore[import-untyped]
 
 
 class DeleteMcpServerCommand:

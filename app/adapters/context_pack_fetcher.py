@@ -12,7 +12,7 @@ from pydantic import ValidationError
 from app.models.context_source import ContextSource
 from app.models.context_source import ContextSourceState
 from app.schemas.context_pack import ContextPackResponse, MergeableContextPack
-from app.repositories.credential_repository import CredentialRepository
+from app.repositories.credential_applier import CredentialApplier
 from app.infra.logging_config import get_logger
 
 logger = get_logger("context_pack_fetcher")
@@ -36,8 +36,8 @@ class FetchResult:
 class ContextPackFetcher:
     """Fetches context packs from a registered source."""
 
-    def __init__(self, credential_service: CredentialRepository) -> None:
-        self._credential_service = credential_service
+    def __init__(self, credential_applier: CredentialApplier) -> None:
+        self._credential_applier = credential_applier
 
     def fetch(
         self,
@@ -58,10 +58,7 @@ class ContextPackFetcher:
 
         headers: dict[str, str] = {"Accept": "application/json"}
         try:
-            headers = self._credential_service.apply_credentials(
-                credential_id=source.credential_id,
-                headers=headers,
-            )
+            headers = self._credential_applier.apply(source.credential_id, headers)
         except ValueError as e:
             return FetchResult(error=str(e))
 

@@ -1,8 +1,8 @@
-from tessera_sdk.identies import IdentiesClient
-from tessera_sdk.identies.schemas.external_account_response import CheckResponse
-from tessera_sdk.identies.schemas.user_response import UserResponse
-from tessera_sdk.utils.m2m_token import M2MTokenClient
-from tessera_sdk.utils.cache import Cache
+from tessera_sdk.clients.identies import IdentiesClient
+from tessera_sdk.clients.identies.schemas.external_account_response import CheckResponse
+from tessera_sdk.clients.identies.schemas.user_response import UserResponse
+from tessera_sdk.infra import AuthTokenProvider
+from tessera_sdk.infra.cache import Cache
 from app.schemas.user import User
 from app.repositories.user_repository import UserRepository
 from app.utils.db.db_session_helper import db_session
@@ -36,8 +36,7 @@ class Linker:
         return False
 
     def generate_link_token(self, channel: str, external_id: str) -> str:
-        m2m_token = self._get_m2m_token()
-        identies_client = IdentiesClient(api_token=m2m_token)
+        identies_client = self._get_identies_client()
         link_response = identies_client.create_link_token(
             platform=channel,
             external_user_id=external_id,
@@ -51,8 +50,7 @@ class Linker:
         return self._read_cache(channel, external_id)
 
     def _check_identies(self, channel: str, external_id: str) -> CheckResponse:
-        m2m_token = self._get_m2m_token()
-        identies_client = IdentiesClient(api_token=m2m_token)
+        identies_client = self._get_identies_client()
         check_response = identies_client.check_external_account(
             platform=channel,
             external_id=external_id,
@@ -79,11 +77,7 @@ class Linker:
             if user:
                 return user
 
-            m2m_token = self._get_m2m_token()
-
-            identies_client = IdentiesClient(
-                api_token=m2m_token,
-            )
+            identies_client = self._get_identies_client()
 
             identies_user = identies_client.get_internal_user(user_id)
 
@@ -104,9 +98,13 @@ class Linker:
 
             return user_service.onboard_user(user)
 
-    def _get_m2m_token(self) -> str:
-        """Get an M2M token for calling Identies."""
-        return M2MTokenClient().get_token_sync().access_token
+    def _get_auth_token(self) -> str:
+        """Get an auth token (IDENTIES_API_KEY first, Auth0 M2M fallback)."""
+        return AuthTokenProvider().get_token()
+
+    def _get_identies_client(self) -> IdentiesClient:
+        """Build an Identies client with the resolved auth token."""
+        return IdentiesClient(api_token=self._get_auth_token())
 
     def _linked_cache_key(self, channel: str, external_id: str) -> str:
         """Build cache key for linked external account."""

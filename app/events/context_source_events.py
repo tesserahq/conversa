@@ -8,7 +8,7 @@ from uuid import UUID
 
 from app.models.context_source import ContextSource as ContextSourceModel
 from app.schemas.context_source import ContextSourceRead as ContextSourceSchema
-from tessera_sdk.events.event import Event, event_source, event_type  # type: ignore[import-untyped]
+from tessera_sdk.infra.events.event import Event, event_source, event_type  # type: ignore[import-untyped]
 
 # Context source events
 CONTEXT_SOURCE_CREATED = "context_source.created"

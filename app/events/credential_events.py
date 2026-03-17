@@ -8,7 +8,7 @@ from uuid import UUID
 
 from app.models.credential import Credential as CredentialModel
 from app.schemas.credential import CredentialRead as CredentialSchema
-from tessera_sdk.events.event import Event, event_source, event_type  # type: ignore[import-untyped]
+from tessera_sdk.infra.events.event import Event, event_source, event_type  # type: ignore[import-untyped]
 
 # Credential events
 CREDENTIAL_CREATED = "credential.created"

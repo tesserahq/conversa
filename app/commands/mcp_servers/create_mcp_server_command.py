@@ -12,7 +12,7 @@ from app.events.mcp_server_events import build_mcp_server_created_event
 from app.models.mcp_server import MCPServer
 from app.schemas.mcp_server import MCPServerCreate
 from app.repositories.mcp_server_repository import MCPServerRepository
-from tessera_sdk.events.nats_router import NatsEventPublisher  # type: ignore[import-untyped]
+from tessera_sdk.infra.events.nats_router import NatsEventPublisher  # type: ignore[import-untyped]
 
 
 class CreateMcpServerCommand:

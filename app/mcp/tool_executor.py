@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.infra.logging_config import get_logger
 from app.mcp.client_factory import client_context
-from app.repositories.credential_repository import CredentialRepository
+from app.repositories.credential_applier import CredentialApplier
 from app.repositories.mcp_server_repository import MCPServerRepository
 
 logger = get_logger(__name__)
@@ -68,7 +68,7 @@ class MCPToolExecutor:
             JSON-serializable result for the LLM, or error dict on failure.
         """
         mcp_svc = MCPServerRepository(self._db)
-        cred_svc = CredentialRepository(self._db)
+        cred_svc = CredentialApplier(self._db)
 
         server = mcp_svc.get_mcp_server_by_server_id(server_id)
         if server is None:
@@ -77,10 +77,9 @@ class MCPToolExecutor:
                 "reason": f"Server {server_id!r} not found",
             }
 
-        headers = cred_svc.apply_credentials_with_context(
-            credential_id=server.credential_id,
+        headers = cred_svc.apply_for_user(
+            server.credential_id,
             user_id=user_id,
-            context=None,
         )
 
         try:

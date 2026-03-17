@@ -26,7 +26,7 @@ from app.schemas.context_source import (
     ContextSourceUpdate,
 )
 from app.repositories.context_source_repository import ContextSourceRepository
-from tessera_sdk.utils.auth import get_current_user
+from tessera_sdk.server.dependencies.auth import get_current_user
 from app.infra.logging_config import get_logger
 
 logger = get_logger("context_sources")
