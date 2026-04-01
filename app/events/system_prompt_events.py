@@ -8,7 +8,7 @@ from uuid import UUID
 
 from app.models.system_prompt import SystemPrompt as SystemPromptModel
 from app.schemas.system_prompt import SystemPromptRead as SystemPromptSchema
-from tessera_sdk.events.event import Event, event_source, event_type  # type: ignore[import-untyped]
+from tessera_sdk.infra.events.event import Event, event_source, event_type  # type: ignore[import-untyped]
 
 # System prompt events
 SYSTEM_PROMPT_CREATED = "system_prompt.created"

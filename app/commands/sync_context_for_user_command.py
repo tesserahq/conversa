@@ -19,7 +19,7 @@ from app.repositories.context_source_repository import ContextSourceRepository
 from app.repositories.context_source_state_repository import (
     ContextSourceStateRepository,
 )
-from app.repositories.credential_repository import CredentialRepository
+from app.repositories.credential_applier import CredentialApplier
 
 
 class SyncContextForUserCommand:
@@ -48,7 +48,7 @@ class SyncContextForUserCommand:
         state_svc = ContextSourceStateRepository(
             self.db, context_source_repository=source_svc
         )
-        fetcher = ContextPackFetcher(CredentialRepository(self.db))
+        fetcher = ContextPackFetcher(CredentialApplier(self.db))
         merge_svc = ContextMergeRepository()
         snapshot_svc = ContextSnapshotRepository(self.db)
 

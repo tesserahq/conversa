@@ -7,6 +7,7 @@ from app.config import get_settings
 from app.routers.context_sources_router import router as context_sources_router
 from app.routers.credentials_router import router as credentials_router
 from app.routers.mcp_servers_router import router as mcp_servers_router
+from app.routers.oauth_router import router as oauth_router
 from app.routers.sessions_router import sessions_router
 from app.routers.system import router as system_router
 from app.routers.system_prompts_router import router as system_prompts_router
@@ -21,22 +22,29 @@ from app.exceptions.handlers import register_exception_handlers
 from app.infra.logging_config import get_logger
 from app.db import db_manager
 from app.utils.metrics import PrometheusMiddleware, metrics
-from tessera_sdk.fastapi import get_livez_readyz_router
+from tessera_sdk.server.health import get_livez_readyz_router
 
 logger = get_logger()
 
-SKIP_AUTH_PATHS = ["/livez", "/readyz", "/openapi.json", "/docs", "/metrics"]
+SKIP_AUTH_PATHS = [
+    "/livez",
+    "/readyz",
+    "/openapi.json",
+    "/docs",
+    "/metrics",
+    "/oauth/slack/callback",
+]
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: init Telegram plugin when enabled. Shutdown: stop Telegram."""
+    """Startup: init channel plugins when enabled. Shutdown: stop all plugins."""
     settings = get_settings()
+    from app.core.app_state import state
 
     if settings.telegram_enabled and settings.telegram_bot_token:
         from app.channels.plugins.telegram.plugin import TelegramPlugin
         from app.channels.plugins.telegram.config import TelegramConfig
-        from app.core.app_state import state
 
         telegram = TelegramPlugin(TelegramConfig(bot_token=settings.telegram_bot_token))
         state.registry.register_channel(telegram)
@@ -44,10 +52,40 @@ async def lifespan(app: FastAPI):
         app.state.telegram = telegram
     else:
         app.state.telegram = None
+
+    if (
+        settings.slack_enabled
+        and settings.slack_app_token
+        and settings.slack_client_id
+        and settings.slack_client_secret
+        and settings.slack_signing_secret
+    ):
+        from app.channels.plugins.slack.plugin import SlackPlugin
+        from app.channels.plugins.slack.config import SlackConfig
+
+        slack = SlackPlugin(
+            SlackConfig(
+                app_token=settings.slack_app_token,
+                client_id=settings.slack_client_id,
+                client_secret=settings.slack_client_secret,
+                signing_secret=settings.slack_signing_secret,
+                oauth_success_url=settings.slack_oauth_success_url or "/",
+            )
+        )
+        state.registry.register_channel(slack)
+        await slack.start()
+        app.state.slack = slack
+    else:
+        app.state.slack = None
+
     yield
+
     telegram = getattr(app.state, "telegram", None)
     if telegram:
         await telegram.stop()
+    slack = getattr(app.state, "slack", None)
+    if slack:
+        await slack.stop()
 
 
 class EndpointFilter(logging.Filter):
@@ -79,9 +117,13 @@ def create_app(testing: bool = False, auth_middleware=None) -> FastAPI:
 
     if not testing and not settings.disable_auth:
         logger.info("Main: Adding authentication middleware")
-        from tessera_sdk.middleware.authentication import AuthenticationMiddleware
-        from tessera_sdk.middleware.user_onboarding import UserOnboardingMiddleware
-        from tessera_sdk.utils.service_factory import create_service_factory
+        from tessera_sdk.server.middleware.authentication import (
+            AuthenticationMiddleware,
+        )
+        from tessera_sdk.server.middleware.user_onboarding import (
+            UserOnboardingMiddleware,
+        )
+        from tessera_sdk.infra.service_factory import create_service_factory
         from app.repositories.user_repository import UserRepository
 
         # Create service factory for UserRepository
@@ -127,6 +169,7 @@ def create_app(testing: bool = False, auth_middleware=None) -> FastAPI:
     app.include_router(context_sources_router)
     app.include_router(credentials_router)
     app.include_router(mcp_servers_router)
+    app.include_router(oauth_router)
 
     app.include_router(get_livez_readyz_router())
 

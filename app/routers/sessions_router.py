@@ -16,7 +16,7 @@ from app.schemas.session import MessageRead, SessionListRow, SessionRead
 from app.repositories.session_manager import SessionManager
 from app.repositories.session_repository import SessionRepository
 from app.repositories.session_message_repository import SessionMessageRepository
-from tessera_sdk.utils.auth import get_current_user
+from tessera_sdk.server.dependencies.auth import get_current_user
 
 sessions_router = APIRouter(prefix="/sessions", tags=["Session"])
 

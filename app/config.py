@@ -121,6 +121,26 @@ class Settings(BaseSettings):
     telegram_webhook_secret: Optional[str] = Field(
         default=None, json_schema_extra={"env": "TELEGRAM_WEBHOOK_SECRET"}
     )
+
+    # Conversa / Slack
+    slack_enabled: bool = Field(
+        default=False, json_schema_extra={"env": "SLACK_ENABLED"}
+    )
+    slack_app_token: Optional[str] = Field(
+        default=None, json_schema_extra={"env": "SLACK_APP_TOKEN"}
+    )
+    slack_client_id: Optional[str] = Field(
+        default=None, json_schema_extra={"env": "SLACK_CLIENT_ID"}
+    )
+    slack_client_secret: Optional[str] = Field(
+        default=None, json_schema_extra={"env": "SLACK_CLIENT_SECRET"}
+    )
+    slack_signing_secret: Optional[str] = Field(
+        default=None, json_schema_extra={"env": "SLACK_SIGNING_SECRET"}
+    )
+    slack_oauth_success_url: Optional[str] = Field(
+        default=None, json_schema_extra={"env": "SLACK_OAUTH_SUCCESS_URL"}
+    )
     conversa_rate_limit_per_user_per_minute: Optional[int] = Field(
         default=None,
         json_schema_extra={"env": "CONVERSA_RATE_LIMIT_PER_USER_PER_MINUTE"},
@@ -150,11 +170,8 @@ class Settings(BaseSettings):
         default=False,
         json_schema_extra={"env": "MCP_TOOLS_ENABLED"},
     )
-    litellm_api_key: Optional[str] = Field(
-        default=None, json_schema_extra={"env": "LITELLM_API_KEY"}
-    )
-    litellm_api_base: Optional[str] = Field(
-        default=None, json_schema_extra={"env": "LITELLM_API_BASE"}
+    llm_api_key: Optional[str] = Field(
+        default=None, json_schema_extra={"env": "LLM_API_KEY"}
     )
 
     # Context sync (Phase 2)

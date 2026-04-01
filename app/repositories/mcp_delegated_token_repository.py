@@ -7,9 +7,9 @@ import time
 from typing import Any, Callable, Optional
 from uuid import UUID
 
-from tessera_sdk.identies import IdentiesClient  # type: ignore[import-untyped]
-from tessera_sdk.utils.cache import Cache  # type: ignore[import-untyped]
-from tessera_sdk.utils.m2m_token import M2MTokenClient  # type: ignore[import-untyped]
+from tessera_sdk.clients.identies import IdentiesClient
+from tessera_sdk.infra.cache import Cache
+from tessera_sdk.infra.m2m_token import M2MTokenClient
 
 TOKEN_CACHE_NAMESPACE = "mcp_delegated_tokens"
 DEFAULT_TOKEN_CACHE_TTL = 300

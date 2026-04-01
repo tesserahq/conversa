@@ -25,7 +25,7 @@ from app.schemas.mcp_server import (
     MCPToolsRefreshResponse,
 )
 from app.repositories.mcp_server_repository import MCPServerRepository
-from tessera_sdk.utils.auth import get_current_user  # type: ignore[import-untyped]
+from tessera_sdk.server.dependencies.auth import get_current_user  # type: ignore[import-untyped]
 
 router = APIRouter(
     prefix="/mcp-servers",

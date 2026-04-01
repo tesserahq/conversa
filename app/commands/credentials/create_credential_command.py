@@ -12,7 +12,7 @@ from app.events.credential_events import build_credential_created_event
 from app.models.credential import Credential
 from app.schemas.credential import CredentialCreate
 from app.repositories.credential_repository import CredentialRepository
-from tessera_sdk.events.nats_router import NatsEventPublisher  # type: ignore[import-untyped]
+from tessera_sdk.infra.events.nats_router import NatsEventPublisher  # type: ignore[import-untyped]
 
 
 class CreateCredentialCommand:

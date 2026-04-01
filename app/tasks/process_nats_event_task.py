@@ -10,7 +10,7 @@ from pydantic import ValidationError
 from app.config import get_settings
 from app.infra.celery_app import celery_app
 from app.infra.logging_config import get_logger
-from tessera_sdk.events.event import Event
+from tessera_sdk.infra.events.event import Event
 from app.db import db_manager
 from app.models.session import Session
 import asyncio
