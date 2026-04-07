@@ -59,7 +59,7 @@ Under **Event Subscriptions → Subscribe to bot events**, add:
 
 #### 6. Enable OAuth & Install
 
-Under **Settings → Manage Distribution**, enable public distribution if needed. Then install the app to a workspace via the `/oauth/slack/install` endpoint — this performs the OAuth flow and stores the per-workspace `xoxb-...` bot token automatically.
+Under **Settings → Manage Distribution**, enable public distribution if needed. Then call `POST /oauth/slack/install` to retrieve an `authorize_url`, and have your UI redirect the user there to complete the OAuth flow. Conversa stores the per-workspace `xoxb-...` bot token automatically on callback.
 
 #### Environment Variables
 

@@ -35,11 +35,11 @@ def _decode_state(state: str) -> Optional[str]:
         return None
 
 
-@router.get("/slack/install")
+@router.post("/slack/install")
 async def slack_install(
     current_user=Depends(get_current_user),
-) -> RedirectResponse:
-    """Redirect authenticated Tessera user to Slack OAuth consent screen."""
+) -> dict[str, str]:
+    """Build Slack OAuth consent URL for authenticated Tessera user."""
     settings = get_settings()
     if not settings.slack_client_id:
         raise HTTPException(status_code=503, detail="Slack integration not configured")
@@ -51,7 +51,7 @@ async def slack_install(
         f"&scope={_SLACK_BOT_SCOPES}"
         f"&state={state}"
     )
-    return RedirectResponse(url=url)
+    return {"authorize_url": url}
 
 
 @router.get("/slack/callback")
