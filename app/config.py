@@ -44,7 +44,7 @@ class Settings(BaseSettings):
         json_schema_extra={"env": "IDENTIES_HOST"},
     )
     link_url: str = Field(
-        default="https://app.mylinden.family/link/{link_token}",
+        default="https://app.mylinden.family/link/{channel}/{link_token}",
         json_schema_extra={"env": "LINK_URL"},
     )
     rollbar_access_token: Optional[str] = Field(
