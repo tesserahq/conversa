@@ -99,7 +99,9 @@ class Router:
 
     def _create_link_outbound_message(self, msg: InboundMessage) -> OutboundMessage:
         link_token = self._linker.generate_link_token(msg.channel, msg.sender_id)
-        link_url = get_settings().link_url.format(link_token=link_token)
+        link_url = get_settings().link_url.format(
+            channel=msg.channel, link_token=link_token
+        )
         welcome_message = WELCOME_MESSAGE.format(channel=msg.channel, link_url=link_url)
         return OutboundMessage(
             channel=msg.channel,
