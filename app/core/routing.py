@@ -16,6 +16,7 @@ from app.repositories.session_manager import SessionManager
 from app.tasks.context_sync_task import sync_context_for_user_task
 from app.utils.db.db_session_helper import db_session
 from app.workers.llm import LLMRunner, build_llm_runner_from_env
+import asyncio
 
 WELCOME_MESSAGE = "Hello and welcome. Please click the link below to connect your {channel} account to your Linden account so we can continue. This link is valid for 10 minutes: {link_url}"
 
@@ -30,37 +31,37 @@ class Router:
     async def route_to_llm(
         self,
         msg: InboundMessage,
-        user_id: Optional[UUID] = None,
+        user_id: UUID,
     ) -> OutboundMessage:
-        if self.is_linked(msg.channel, msg.sender_id) is False:
+        if await asyncio.to_thread(self.is_linked, msg.channel, msg.sender_id) is False:
             return self._create_link_outbound_message(msg)
 
         with db_session() as db:
-            # Load session and history
             session_manager = SessionManager(db)
             session = session_manager.get_or_create_session(msg, user_id)
-            history = session_manager.get_history_for_llm(session.id, limit=50)
-
-            # Load context and toolsets
+            session_id = session.id
+            history = session_manager.get_history_for_llm(session_id, limit=50)
             context = self._load_context_for_user(db, session.user_id)
             toolsets = await self._get_toolsets_for_user(db, session.user_id)
 
-            reply_text = await self._llm.run(
-                msg,
-                history=history,
-                context=context,
-                toolsets=toolsets,
-            )
-            outbound = OutboundMessage(
-                channel=msg.channel,
-                account_id=msg.account_id,
-                chat_id=msg.chat_id,
-                thread_id=msg.thread_id,
-                text=reply_text,
-                reply_to=msg.message_id,
-                media=[],
-            )
-            session_manager.add_turn(session.id, msg, outbound)
+        reply_text = await self._llm.run(
+            msg,
+            history=history,
+            context=context,
+            toolsets=toolsets,
+            user_id=user_id,
+        )
+        outbound = OutboundMessage(
+            channel=msg.channel,
+            account_id=msg.account_id,
+            chat_id=msg.chat_id,
+            thread_id=msg.thread_id,
+            text=reply_text,
+            reply_to=msg.message_id,
+            media=[],
+        )
+        with db_session() as db:
+            SessionManager(db).add_turn(session_id, msg, outbound)
         return outbound
 
     def _load_context_for_user(self, db: Any, user_id: Optional[UUID]) -> Optional[Any]:

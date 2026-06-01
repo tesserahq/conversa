@@ -173,6 +173,14 @@ class Settings(BaseSettings):
     llm_api_key: Optional[str] = Field(
         default=None, json_schema_extra={"env": "LLM_API_KEY"}
     )
+    modela_audience: str = Field(
+        default="api://modela",
+        json_schema_extra={"env": "MODELA_AUDIENCE"},
+    )
+    modela_scopes: str = Field(
+        default="read",
+        json_schema_extra={"env": "MODELA_SCOPES"},
+    )
 
     # Context sync (Phase 2)
     context_sync_interval_seconds: int = Field(
