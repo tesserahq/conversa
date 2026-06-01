@@ -11,6 +11,9 @@ from sqlalchemy.orm import Session
 from app.constants.credentials import CredentialType
 from app.repositories.credential_repository import CredentialRepository
 from app.repositories.mcp_delegated_token_repository import MCPDelegatedTokenRepository
+from app.infra.logging_config import get_logger
+
+logger = get_logger()
 
 
 def _default_m2m_token_provider() -> Optional[str]:
@@ -139,6 +142,7 @@ class CredentialApplier:
         force_refresh: bool,
     ) -> Dict[str, str]:
         credential = self._crud.get_credential(credential_id)
+        logger.info(f"credential: {credential_id}")
         if not credential:
             raise ValueError(f"Credential {credential_id} not found")
         fields = self._crud.get_credential_fields(credential_id) or {}

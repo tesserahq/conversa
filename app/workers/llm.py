@@ -1,64 +1,23 @@
 from __future__ import annotations
 
+import asyncio
 import json
-from datetime import datetime
 from typing import Any, List, Optional
+from uuid import UUID
 
-from pydantic_ai import Agent
-from pydantic_ai.models.openai import OpenAIChatModel
-from pydantic_ai.providers.openai import OpenAIProvider
+from tessera_sdk.clients.modela import CompletionMessage, ModelaClient
 
 from app.channels.envelope import InboundMessage
 from app.config import get_settings
-from app.infra.logging_config import get_logger
-from app.utils.db.db_session_helper import db_session
-from app.repositories.system_prompt_repository import SystemPromptRepository
 from app.constants.default_system_prompt import DefaultSystemPrompt
-from pydantic_ai.messages import (
-    ModelRequest,
-    SystemPromptPart,
-)
+from app.infra.logging_config import get_logger
+from app.repositories.mcp_delegated_token_repository import MCPDelegatedTokenRepository
+from app.repositories.system_prompt_repository import SystemPromptRepository
+from app.utils.db.db_session_helper import db_session
 
 logger = get_logger()
 
 SYSTEM_PROMPT_NAME = "default"
-
-
-def add_the_date_and_time() -> str:
-    """Return the current date and time. Use when the user asks for today's date or what day it is."""
-    return f"The date and time is {datetime.now()}."
-
-
-def add_the_user_name() -> str:
-    """Return the user's name. Use when the user asks for their name."""
-    return "The user's name is Peter"
-
-
-def _history_to_message_list(history: List[dict[str, str]]) -> List[Any]:
-    """Convert list of {role, content} to pydantic_ai ModelMessage list for message_history."""
-    try:
-        from pydantic_ai.messages import (
-            ModelRequest,
-            ModelResponse,
-            SystemPromptPart,
-            TextPart,
-            UserPromptPart,
-        )
-    except ImportError:
-        return []
-    out: List[Any] = []
-    for item in history:
-        role = item.get("role", "user")
-        content = (item.get("content") or "").strip()
-        if not content:
-            continue
-        if role == "user":
-            out.append(ModelRequest(parts=[UserPromptPart(content=content)]))
-        elif role == "assistant":
-            out.append(ModelResponse(parts=[TextPart(content=content)]))
-        elif role == "system":
-            out.append(ModelRequest(parts=[SystemPromptPart(content=content)]))
-    return out
 
 
 def _format_context_for_prompt(context: dict[str, Any]) -> str:
@@ -75,41 +34,54 @@ def _format_context_for_prompt(context: dict[str, Any]) -> str:
     return "\n\nUser context (use when relevant):\n" + "\n".join(parts)
 
 
-def _message_list_with_system_prompt(
+def _build_completion_messages(
     system_prompt: str,
     history: List[dict[str, str]],
+    user_content: str,
     context: Optional[dict[str, Any]] = None,
-) -> List[Any]:
-    """Build message_history with system prompt always first, then conversation history."""
-
-    # https://github.com/pydantic/pydantic-ai/issues/4039
-    # https://ai.pydantic.dev/agent/#system-prompts
+) -> List[CompletionMessage]:
+    """Build Modela messages: system prompt, history, then current user turn."""
     full_prompt = system_prompt
     if context:
         ctx_block = _format_context_for_prompt(context)
         if ctx_block:
             full_prompt = system_prompt.rstrip() + ctx_block
-    system_message = ModelRequest(parts=[SystemPromptPart(content=full_prompt)])
-    rest = _history_to_message_list(history)
-    return [system_message] + rest
+
+    messages: List[CompletionMessage] = [
+        CompletionMessage(role="system", content=full_prompt)
+    ]
+    for item in history:
+        role = item.get("role", "user")
+        content = (item.get("content") or "").strip()
+        if not content:
+            continue
+        if role in ("user", "assistant", "system"):
+            messages.append(CompletionMessage(role=role, content=content))
+
+    user_content = (user_content or "").strip()
+    if user_content:
+        messages.append(CompletionMessage(role="user", content=user_content))
+    return messages
 
 
 class LLMRunner:
     def __init__(
         self,
         model_name: str,
-        api_key: Optional[str] = None,
-        api_base: Optional[str] = None,
         system_prompt: Optional[str] = None,
+        *,
+        modela_audience: str,
+        modela_scopes: str,
+        token_repo: Optional[MCPDelegatedTokenRepository] = None,
+        modela_base_url: Optional[str] = None,
     ) -> None:
-        provider = OpenAIProvider(api_key=api_key)
-        model = OpenAIChatModel(model_name, provider=provider)
-        logger.info(f"Initializing LLM runner with model {model_name}")
+        logger.info("Initializing LLM runner with model %s", model_name)
+        self._model_name = model_name
         self._system_prompt = system_prompt or ""
-        self._agent = Agent(
-            model,
-            tools=[add_the_date_and_time, add_the_user_name],
-        )
+        self._modela_audience = modela_audience
+        self._modela_scopes = modela_scopes
+        self._token_repo = token_repo or MCPDelegatedTokenRepository()
+        self._modela_base_url = modela_base_url
 
     async def run(
         self,
@@ -117,39 +89,58 @@ class LLMRunner:
         history: Optional[List[dict[str, str]]] = None,
         context: Optional[dict[str, Any]] = None,
         toolsets: Optional[List[Any]] = None,
+        *,
+        user_id: Optional[UUID] = None,
     ) -> str:
-        prompt = msg.text or ""
-        message_history = _message_list_with_system_prompt(
+        if user_id is None:
+            raise ValueError("LLM completion requires user_id for delegated auth")
+
+        if toolsets:
+            logger.debug("MCP toolsets present but Modela handles tools internally")
+
+        messages = _build_completion_messages(
             self._system_prompt,
             history or [],
+            msg.text or "",
             context=context,
         )
-        print(f"Toolsets: {toolsets}")
-        logger.info(f"Toolsets: {toolsets}")
-        result = await self._agent.run(
-            prompt, message_history=message_history, toolsets=toolsets
+        token = self._token_repo.get_access_token(
+            user_id=user_id,
+            audience=self._modela_audience,
+            scopes=self._modela_scopes,
         )
-        return str(result.output)
+        logger.info(f"token: {token}")
+        client_kwargs: dict[str, Any] = {"api_token": token}
+        if self._modela_base_url is not None:
+            client_kwargs["base_url"] = self._modela_base_url
+        client = ModelaClient(**client_kwargs)
+
+        response = await asyncio.to_thread(
+            client.complete,
+            messages=messages,
+            model=self._model_name,
+            project_id="*",
+        )
+        if not response.choices:
+            raise ValueError("Modela returned no completion choices")
+        return response.choices[0].message.content
 
 
 def build_llm_runner_from_env() -> LLMRunner:
     settings = get_settings()
     logger.info(
-        "LLM runner config: model=%s, api_key=%s",
+        "LLM runner config: model=%s, modela_audience=%s",
         settings.llm_model,
-        "set" if settings.llm_api_key else "not set",
+        settings.modela_audience,
     )
-    if not settings.llm_api_key:
-        logger.warning(
-            "LLM_API_KEY is not set; set it to a valid OpenAI API key to avoid 401 errors."
-        )
 
     system_prompt = _get_system_prompt()
 
     return LLMRunner(
         model_name=settings.llm_model,
-        api_key=settings.llm_api_key,
         system_prompt=system_prompt,
+        modela_audience=settings.modela_audience,
+        modela_scopes=settings.modela_scopes,
     )
 
 

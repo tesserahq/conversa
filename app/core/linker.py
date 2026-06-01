@@ -77,26 +77,26 @@ class Linker:
             if user:
                 return user
 
-            identies_client = self._get_identies_client()
+        identies_client = self._get_identies_client()
 
-            identies_user = identies_client.get_internal_user(user_id)
+        identies_user = identies_client.get_internal_user(user_id)
 
-            user = UserOnboard(
-                id=identies_user.id,
-                email=identies_user.email,
-                service_account=identies_user.service_account,
-                preferred_name=identies_user.preferred_name,
-                first_name=identies_user.first_name,
-                last_name=identies_user.last_name,
-                avatar_url=identies_user.avatar_url,
-                provider=identies_user.provider,
-                verified=identies_user.verified,
-                verified_at=identies_user.verified_at,
-                confirmed_at=identies_user.confirmed_at,
-                external_id=identies_user.external_id,
-            )
+        user = UserOnboard(
+            id=identies_user.id,
+            email=identies_user.email,
+            service_account=identies_user.service_account,
+            preferred_name=identies_user.preferred_name,
+            first_name=identies_user.first_name,
+            last_name=identies_user.last_name,
+            avatar_url=identies_user.avatar_url,
+            provider=identies_user.provider,
+            verified=identies_user.verified,
+            verified_at=identies_user.verified_at,
+            confirmed_at=identies_user.confirmed_at,
+            external_id=identies_user.external_id,
+        )
 
-            return user_service.onboard_user(user)
+        return user_service.onboard_user(user)
 
     def _get_auth_token(self) -> str:
         """Get an auth token (IDENTIES_API_KEY first, Auth0 M2M fallback)."""

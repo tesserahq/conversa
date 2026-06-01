@@ -9,6 +9,7 @@ from typing import Any, Optional
 
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
+from tessera_sdk.clients._base.exceptions import TesseraError
 
 from app.channels.base import ChannelCapabilities, ChannelMeta
 from app.channels.envelope import InboundMessage, OutboundMessage
@@ -48,6 +49,7 @@ class TelegramPlugin:
             ApplicationBuilder().token(self.cfg.bot_token).request(request).build()
         )
         self._app.add_handler(MessageHandler(filters.ALL, self._on_update))
+        self._app.add_error_handler(self._on_error)
         await self._app.initialize()
 
         if self.cfg.mode == "polling":
@@ -102,11 +104,27 @@ class TelegramPlugin:
         linked_user = state.router._linker.get_linked_user(
             inbound.channel, inbound.sender_id
         )
-        user_id = linked_user.id if linked_user else None
+        user_id = linked_user.id
 
         reply = await state.router.route_to_llm(inbound, user_id=user_id)
 
         await self.send(reply)
+
+    async def _on_error(
+        self, update: object, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        logger.error("Unhandled exception in Telegram update", exc_info=context.error)
+        if not isinstance(update, Update):
+            return
+        msg = update.effective_message
+        if msg is None:
+            return
+        if isinstance(context.error, TesseraError):
+            text = "Sorry, I'm having trouble reaching an internal service. Please try again in a moment."
+        else:
+            text = "Something went wrong. Please try again."
+        with contextlib.suppress(Exception):
+            await msg.reply_text(text)
 
     async def handle_inbound(self, msg: InboundMessage) -> None:
 
