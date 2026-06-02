@@ -102,7 +102,7 @@ class TelegramPlugin:
             raw=update.to_dict(),
         )
 
-        linked_user = state.router._linker.get_linked_user(
+        linked_user = state.router._linker.get_or_resolve_linked_user(
             inbound.channel, inbound.sender_id
         )
         if linked_user is None:
