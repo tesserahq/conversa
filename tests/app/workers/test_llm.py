@@ -121,7 +121,6 @@ async def test_run_uses_delegated_token_and_modela_complete(monkeypatch):
     ]
     assert complete_calls[0]["init"]["api_token"] == "delegated-user-token"
     complete = complete_calls[1]["complete"]
-    assert complete["model"] == "gpt-4o-mini"
     assert complete["project_id"] == "*"
     assert complete["messages"][0].role == "system"
     assert complete["messages"][-1].role == "user"

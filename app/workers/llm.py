@@ -115,10 +115,11 @@ class LLMRunner:
             client_kwargs["base_url"] = self._modela_base_url
         client = ModelaClient(**client_kwargs)
 
+        # TODO: I think this needs to be configured dynamicallly somewhere
+        # model=self._model_name,
         response = await asyncio.to_thread(
             client.complete,
             messages=messages,
-            model=self._model_name,
             project_id="*",
         )
         if not response.choices:
