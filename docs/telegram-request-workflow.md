@@ -37,9 +37,10 @@ sequenceDiagram
     alt cache hit
         Redis-->>Linker: User
     else cache miss
-        Linker-->>PTB: null (user_id unknown until Router checks link)
+        Linker-->>PTB: null
+        PTB-->>TG: deterministic error message
     end
-    PTB->>Router: route_to_llm(inbound, user_id?)
+    PTB->>Router: route_to_llm(inbound, user_id) [cache hit path]
 
     Router->>Linker: is_account_linked(channel, sender_id)
     alt not linked
@@ -90,9 +91,9 @@ sequenceDiagram
 
 [`TelegramPlugin._on_update`](../app/channels/plugins/telegram/plugin.py) maps the Telegram `Update` to [`InboundMessage`](../app/channels/envelope.py): `channel=telegram`, `sender_id`, `chat_id`, `message_id`, `text`, `timestamp`, `raw`.
 
-### 3. Optional linked-user hint
+### 3. Linked-user guard in plugin
 
-Before routing, the plugin calls `Linker.get_linked_user()`. That only returns a user if the **Redis linked-account cache** already has an entry (`identies_linked` namespace). On a cache miss it returns `None`; linking is still resolved inside `Router.is_linked()`.
+Before routing, the plugin calls `Linker.get_linked_user()` as a cache lookup. If the linked user is missing, the plugin now returns a deterministic user-facing error message and does not continue to `route_to_llm`.
 
 ### 4. Router — account linking (Identies, service identity)
 
@@ -100,7 +101,7 @@ Before routing, the plugin calls `Linker.get_linked_user()`. That only returns a
 
 **Unlinked sender**
 
-1. `Linker.is_account_linked()` → cache, then [`IdentiesClient.check_external_account`](../app/core/linker.py).
+1. `Linker.get_or_resolve_linked_user()` → cache first, then [`IdentiesClient.check_external_account`](../app/core/linker.py) on miss.
 2. Identies calls use a **service token**: `AuthTokenProvider().get_token()` (`IDENTIES_API_KEY` or Auth0 M2M fallback).
 3. `Linker.generate_link_token()` → `IdentiesClient.create_link_token(platform, external_user_id)`.
 4. Router returns a welcome message with `LINK_URL` (no LLM, no DB session for chat logic beyond what link flow needs).
@@ -108,8 +109,8 @@ Before routing, the plugin calls `Linker.get_linked_user()`. That only returns a
 **Linked sender**
 
 1. Identies confirms link; user is onboarded into Conversa DB if missing (`UserRepository.onboard_user`).
-2. Linked user is cached in Redis for 24h.
-3. Router opens a DB session: `SessionManager.get_or_create_session`, loads history, optional context snapshot, optional MCP toolsets (loaded but not passed to Modela today).
+2. Linked user is cached in Redis for 24h and returned to router.
+3. Router resolves an authoritative `user_id` and opens a DB session: `SessionManager.get_or_create_session`, loads history, optional context snapshot, optional MCP toolsets (loaded but not passed to Modela today).
 
 **RBAC**: **none** on this path. Authorization is “is this Telegram `sender_id` linked to a Linden user in Identies?”
 

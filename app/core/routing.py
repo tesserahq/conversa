@@ -19,6 +19,7 @@ from app.workers.llm import LLMRunner, build_llm_runner_from_env
 import asyncio
 
 WELCOME_MESSAGE = "Hello and welcome. Please click the link below to connect your {channel} account to your Linden account so we can continue. This link is valid for 10 minutes: {link_url}"
+LINK_RESOLUTION_ERROR_MESSAGE = "Sorry, we couldn't verify your linked account right now. Please try again in a moment."
 
 
 class Router:
@@ -31,14 +32,20 @@ class Router:
     async def route_to_llm(
         self,
         msg: InboundMessage,
-        user_id: UUID,
+        user_id: Optional[UUID],
     ) -> OutboundMessage:
-        if await asyncio.to_thread(self.is_linked, msg.channel, msg.sender_id) is False:
+        linked_user = await asyncio.to_thread(
+            self._linker.get_or_resolve_linked_user, msg.channel, msg.sender_id
+        )
+        if linked_user is None:
             return self._create_link_outbound_message(msg)
+        resolved_user_id = user_id or linked_user.id
+        if resolved_user_id is None:
+            return self._create_link_resolution_error_outbound_message(msg)
 
         with db_session() as db:
             session_manager = SessionManager(db)
-            session = session_manager.get_or_create_session(msg, user_id)
+            session = session_manager.get_or_create_session(msg, resolved_user_id)
             session_id = session.id
             history = session_manager.get_history_for_llm(session_id, limit=50)
             context = self._load_context_for_user(db, session.user_id)
@@ -49,7 +56,7 @@ class Router:
             history=history,
             context=context,
             toolsets=toolsets,
-            user_id=user_id,
+            user_id=resolved_user_id,
         )
         outbound = OutboundMessage(
             channel=msg.channel,
@@ -110,6 +117,19 @@ class Router:
             chat_id=msg.chat_id,
             thread_id=msg.thread_id,
             text=welcome_message,
+            reply_to=msg.message_id,
+            media=[],
+        )
+
+    def _create_link_resolution_error_outbound_message(
+        self, msg: InboundMessage
+    ) -> OutboundMessage:
+        return OutboundMessage(
+            channel=msg.channel,
+            account_id=msg.account_id,
+            chat_id=msg.chat_id,
+            thread_id=msg.thread_id,
+            text=LINK_RESOLUTION_ERROR_MESSAGE,
             reply_to=msg.message_id,
             media=[],
         )

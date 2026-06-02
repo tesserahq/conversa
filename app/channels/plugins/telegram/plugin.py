@@ -19,6 +19,7 @@ from .config import TelegramConfig
 from telegram.request import HTTPXRequest
 
 logger = get_logger()
+LINKED_USER_RESOLUTION_ERROR = "Sorry, we couldn't verify your linked account right now. Please try again in a moment."
 
 
 class TelegramPlugin:
@@ -104,6 +105,24 @@ class TelegramPlugin:
         linked_user = state.router._linker.get_linked_user(
             inbound.channel, inbound.sender_id
         )
+        if linked_user is None:
+            logger.warning(
+                "Linked user missing in cache for %s sender %s",
+                inbound.channel,
+                inbound.sender_id,
+            )
+            await self.send(
+                OutboundMessage(
+                    channel=inbound.channel,
+                    account_id=inbound.account_id,
+                    chat_id=inbound.chat_id,
+                    thread_id=inbound.thread_id,
+                    text=LINKED_USER_RESOLUTION_ERROR,
+                    reply_to=inbound.message_id,
+                    media=[],
+                )
+            )
+            return
         user_id = linked_user.id
 
         reply = await state.router.route_to_llm(inbound, user_id=user_id)
@@ -129,7 +148,25 @@ class TelegramPlugin:
     async def handle_inbound(self, msg: InboundMessage) -> None:
 
         linked_user = state.router._linker.get_linked_user(msg.channel, msg.sender_id)
-        user_id = linked_user.id if linked_user else None
+        if linked_user is None:
+            logger.warning(
+                "Linked user missing in cache for %s sender %s",
+                msg.channel,
+                msg.sender_id,
+            )
+            await self.send(
+                OutboundMessage(
+                    channel=msg.channel,
+                    account_id=msg.account_id,
+                    chat_id=msg.chat_id,
+                    thread_id=msg.thread_id,
+                    text=LINKED_USER_RESOLUTION_ERROR,
+                    reply_to=msg.message_id,
+                    media=[],
+                )
+            )
+            return
+        user_id = linked_user.id
         reply = await state.router.route_to_llm(msg, user_id=user_id)
 
         await self.send(reply)

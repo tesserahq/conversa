@@ -22,18 +22,7 @@ class Linker:
         Check if the account is already linked in Identies.
         Uses cache first; only calls Identies on cache miss. Writes to cache when linked.
         """
-        if self._in_cache(channel, external_id) is True:
-            return True
-
-        linked_response = self._check_identies(channel, external_id)
-
-        if linked_response.linked is True:
-            # We need to fetch the user from Identies. Users in conversa
-            # are being used as a cache for Identies users.
-            self._fetch_user(linked_response.user.id)
-            self._write_cache(channel, external_id, linked_response.user)
-            return True
-        return False
+        return self.get_or_resolve_linked_user(channel, external_id) is not None
 
     def generate_link_token(self, channel: str, external_id: str) -> str:
         identies_client = self._get_identies_client()
@@ -47,6 +36,20 @@ class Linker:
     def get_linked_user(self, channel: str, external_id: str) -> User | None:
         if self._in_cache(channel, external_id) is False:
             return None
+        return self._read_cache(channel, external_id)
+
+    def get_or_resolve_linked_user(self, channel: str, external_id: str) -> User | None:
+        cached_user = self.get_linked_user(channel, external_id)
+        if cached_user is not None:
+            return cached_user
+
+        linked_response = self._check_identies(channel, external_id)
+        if linked_response.linked is False:
+            return None
+
+        # Ensure user exists in Conversa DB and refresh Redis cache.
+        self._fetch_user(linked_response.user.id)
+        self._write_cache(channel, external_id, linked_response.user)
         return self._read_cache(channel, external_id)
 
     def _check_identies(self, channel: str, external_id: str) -> CheckResponse:
