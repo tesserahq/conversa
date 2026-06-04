@@ -1,0 +1,21 @@
+site_name: Conversa Documentation
+site_description: Conversation generation service documentation
+
+docs_dir: .
+
+nav:
+  - Home: conversa-context.md
+  - Design: PYTHON_FASTAPI_CHAT_GATEWAY_DESIGN.md
+  - Telegram Workflow: telegram-request-workflow.md
+  - MCP Integration: mcp-server-integration-plan.md
+  - Telegram Examples: telegram/message_examples.md
+  - RFCs:
+    - Credential Applier Split: rfcs/001-credential-applier-split.md
+    - Async RBAC Deadlock: rfcs/002-async-rbac-deadlock.md
+
+plugins:
+  - techdocs-core
+
+exclude_docs: |
+  mkdocs.yml
+  phase2-context-snapshots.md
