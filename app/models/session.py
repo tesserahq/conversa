@@ -33,6 +33,8 @@ class Session(Base, TimestampMixin, SoftDeleteMixin):
         DateTime, nullable=False, default=lambda: datetime.now(timezone.utc)
     )
 
+    user = relationship("User")
+
     messages = relationship(
         "SessionMessage",
         back_populates="session",

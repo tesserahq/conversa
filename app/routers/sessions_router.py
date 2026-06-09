@@ -115,7 +115,8 @@ def reset_session(
         raise HTTPException(status_code=404, detail="Session not found")
     manager = SessionManager(db)
     new_session = manager.reset_session(session.session_key)
-    return SessionRead.model_validate(new_session)
+    refetched = svc.get_session(new_session.id)
+    return SessionRead.model_validate(refetched)
 
 
 @sessions_router.post("/{session_id}/compact", response_model=dict)

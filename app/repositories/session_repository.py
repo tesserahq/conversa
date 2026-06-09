@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy.orm import Query, Session as DBSession
+from sqlalchemy.orm import Query, Session as DBSession, joinedload
 
 from app.models.session import Session
 from app.schemas.session import SessionCreate, SessionUpdate
@@ -18,14 +18,17 @@ class SessionRepository(SoftDeleteRepository[Session]):
     def __init__(self, db: DBSession) -> None:
         super().__init__(db, Session)
 
+    def _session_query(self) -> Query[Session]:
+        return self.db.query(Session).options(joinedload(Session.user))
+
     def get_session(self, session_id: UUID) -> Optional[Session]:
-        return self.db.query(Session).filter(Session.id == session_id).first()
+        return self._session_query().filter(Session.id == session_id).first()
 
     def get_sessions(self, skip: int = 0, limit: int = 100) -> List[Session]:
         return self.db.query(Session).offset(skip).limit(limit).all()
 
     def get_session_by_key(self, session_key: str) -> Optional[Session]:
-        return self.db.query(Session).filter(Session.session_key == session_key).first()
+        return self._session_query().filter(Session.session_key == session_key).first()
 
     def get_or_create_by_key(
         self,
@@ -80,5 +83,5 @@ class SessionRepository(SoftDeleteRepository[Session]):
 
     def search_query(self, filters: Dict[str, Any]) -> Query[Session]:
         """Get a query for sessions with filters (for pagination)."""
-        query = self.db.query(Session)
+        query = self._session_query()
         return apply_filters(query, Session, filters)

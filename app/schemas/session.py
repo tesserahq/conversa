@@ -8,6 +8,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.schemas.user import User as UserRead
+
 # -----------------------------------------------------------------------------
 # Session origin (optional nested model for Session.origin JSONB)
 # -----------------------------------------------------------------------------
@@ -87,7 +89,7 @@ class SessionInDB(SessionBase):
 class SessionRead(SessionInDB):
     """Session for API responses."""
 
-    pass
+    user: Optional[UserRead] = None
 
 
 # -----------------------------------------------------------------------------
