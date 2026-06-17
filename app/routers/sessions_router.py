@@ -36,12 +36,8 @@ def _session_to_list_row(s) -> SessionListRow:
     """Convert session to SessionListRow."""
     row = SessionRead.model_validate(s)
     payload = row.model_dump()
-    if getattr(s, "messages", None):
-        payload["messages"] = [MessageRead.model_validate(m) for m in s.messages]
-        payload["message_count"] = len(s.messages)
-    else:
-        payload["messages"] = None
-        payload["message_count"] = None
+    payload["messages"] = None
+    payload["message_count"] = None
     return SessionListRow(**payload)
 
 
@@ -50,20 +46,17 @@ def list_sessions(
     params: Params = Depends(),
     channel: str | None = Query(None),
     active_minutes: int | None = Query(None),
-    message_limit: int = Query(0, ge=0, le=50),
     _authorized: bool = Depends(rbac["read"]),
     _current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> Page[SessionListRow]:
-    """List sessions with optional filters and last N messages per session."""
+    """List sessions with optional filters."""
     manager = SessionManager(db)
     query = manager.get_sessions_query(
         channel=channel,
         active_minutes=active_minutes,
     )
     page = paginate(query, params=params)
-    if message_limit > 0:
-        manager.attach_recent_messages(page.items, message_limit)
     rows = [_session_to_list_row(s) for s in page.items]
     return create_page(rows, total=page.total, params=params)
 

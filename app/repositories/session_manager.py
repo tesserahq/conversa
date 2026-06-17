@@ -154,7 +154,6 @@ class SessionManager:
         channel: Optional[str] = None,
         active_minutes: Optional[int] = None,
         limit: int = 100,
-        message_limit: int = 0,
     ) -> List[Session]:
         filters: dict[str, Any] = {}
         if channel is not None:
@@ -162,10 +161,7 @@ class SessionManager:
         if active_minutes is not None:
             cutoff = datetime.now(timezone.utc) - timedelta(minutes=active_minutes)
             filters["last_message_at"] = {"operator": ">=", "value": cutoff}
-        sessions = self._session_svc.search(filters)[:limit]
-        if message_limit > 0:
-            self.attach_recent_messages(sessions, message_limit)
-        return sessions
+        return self._session_svc.search(filters)[:limit]
 
     def get_sessions_query(
         self,
@@ -180,15 +176,6 @@ class SessionManager:
             cutoff = datetime.now(timezone.utc) - timedelta(minutes=active_minutes)
             filters["last_message_at"] = {"operator": ">=", "value": cutoff}
         return self._session_svc.search_query(filters)
-
-    def attach_recent_messages(
-        self, sessions: List[Session], message_limit: int
-    ) -> None:
-        """Attach the last N messages to each session (modifies in place)."""
-        for s in sessions:
-            s.messages = self._message_svc.get_messages(
-                s.id, limit=message_limit, offset=0
-            )
 
     def compact_session(
         self,

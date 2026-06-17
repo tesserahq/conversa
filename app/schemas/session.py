@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Any, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.sql.schema import MetaData as SQLAlchemyMetaData
 
 from app.schemas.user import User as UserRead
@@ -108,6 +108,16 @@ class MessageBase(BaseModel):
     provider_message_id: Optional[str] = None
     reply_to: Optional[str] = None
     metadata: Optional[dict[str, Any]] = None
+
+    @field_validator("metadata", mode="before")
+    @classmethod
+    def _sanitize_metadata(cls, v: Any) -> Any:
+        # SQLAlchemy declarative models expose `.metadata` as a MetaData object on the
+        # class/instance when the DB column isn't mapped/loaded; this breaks the API
+        # contract for `metadata` which must be a dict or null.
+        if isinstance(v, SQLAlchemyMetaData):
+            return None
+        return v
 
 
 class MessageCreate(MessageBase):
