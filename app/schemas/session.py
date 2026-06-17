@@ -7,6 +7,7 @@ from typing import Any, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
+from sqlalchemy.sql.schema import MetaData as SQLAlchemyMetaData
 
 from app.schemas.user import User as UserRead
 
@@ -126,10 +127,20 @@ class MessageInDB(MessageBase):
 
     @classmethod
     def model_validate(cls, obj, **kwargs):
-        if hasattr(obj, "message_metadata"):
-            # ORM has .extra as DB column; expose as .metadata for schema
-            if isinstance(obj, dict):
-                return super().model_validate(obj, **kwargs)
+        if isinstance(obj, dict):
+            return super().model_validate(obj, **kwargs)
+
+        # ORM has DB column "metadata" mapped to .extra to avoid shadowing
+        # SQLAlchemy model metadata; normalize it here for API schemas.
+        if hasattr(obj, "id") and hasattr(obj, "session_id"):
+            metadata = getattr(obj, "message_metadata", None)
+            if metadata is None:
+                metadata = getattr(obj, "extra", None)
+            if metadata is None:
+                metadata = getattr(obj, "metadata", None)
+            if isinstance(metadata, SQLAlchemyMetaData):
+                metadata = None
+
             data = {
                 "id": getattr(obj, "id", None),
                 "session_id": getattr(obj, "session_id", None),
@@ -137,11 +148,10 @@ class MessageInDB(MessageBase):
                 "content": getattr(obj, "content", None),
                 "provider_message_id": getattr(obj, "provider_message_id", None),
                 "reply_to": getattr(obj, "reply_to", None),
-                "metadata": getattr(obj, "message_metadata", None)
-                or getattr(obj, "extra", None),
+                "metadata": metadata,
                 "created_at": getattr(obj, "created_at", None),
             }
-            return cls.model_validate(data, **kwargs)
+            return super().model_validate(data, **kwargs)
         return super().model_validate(obj, **kwargs)
 
 

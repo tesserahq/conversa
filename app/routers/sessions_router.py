@@ -65,7 +65,7 @@ def list_sessions(
     if message_limit > 0:
         manager.attach_recent_messages(page.items, message_limit)
     rows = [_session_to_list_row(s) for s in page.items]
-    return create_page(rows, total=page.total, params=page.params)
+    return create_page(rows, total=page.total, params=params)
 
 
 @sessions_router.get("/{session_id}", response_model=SessionRead)
