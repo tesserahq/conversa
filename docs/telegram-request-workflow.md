@@ -82,14 +82,14 @@ sequenceDiagram
 
 ### 1. Telegram transport
 
-- **Startup**: [`app/main.py`](../app/main.py) lifespan registers [`TelegramPlugin`](../app/channels/plugins/telegram/plugin.py) when `TELEGRAM_ENABLED` and `TELEGRAM_BOT_TOKEN` are set.
+- **Startup**: [`app/main.py`](https://github.com/tesserahq/conversa/blob/main/app/main.py) lifespan registers [`TelegramPlugin`](https://github.com/tesserahq/conversa/blob/main/app/channels/plugins/telegram/plugin.py) when `TELEGRAM_ENABLED` and `TELEGRAM_BOT_TOKEN` are set.
 - **Default mode**: long **polling** (`TelegramConfig.mode = "polling"`). The plugin registers `MessageHandler` → `_on_update`.
 - **Webhook mode**: config supports `webhook` and `process_webhook_update()`; the same `_on_update` logic runs after the update is parsed. A public HTTP route for webhooks is not wired in `main.py` today—polling is the typical deployment.
 - **Credential**: `TELEGRAM_BOT_TOKEN` proves Conversa is allowed to call the Telegram Bot API (send/receive). This is **not** end-user JWT auth.
 
 ### 2. Normalization
 
-[`TelegramPlugin._on_update`](../app/channels/plugins/telegram/plugin.py) maps the Telegram `Update` to [`InboundMessage`](../app/channels/envelope.py): `channel=telegram`, `sender_id`, `chat_id`, `message_id`, `text`, `timestamp`, `raw`.
+[`TelegramPlugin._on_update`](https://github.com/tesserahq/conversa/blob/main/app/channels/plugins/telegram/plugin.py) maps the Telegram `Update` to [`InboundMessage`](https://github.com/tesserahq/conversa/blob/main/app/channels/envelope.py): `channel=telegram`, `sender_id`, `chat_id`, `message_id`, `text`, `timestamp`, `raw`.
 
 ### 3. Linked-user guard in plugin
 
@@ -97,11 +97,11 @@ Before routing, the plugin calls `Linker.get_linked_user()` as a cache lookup. I
 
 ### 4. Router — account linking (Identies, service identity)
 
-[`Router.route_to_llm`](../app/core/routing.py):
+[`Router.route_to_llm`](https://github.com/tesserahq/conversa/blob/main/app/core/routing.py):
 
 **Unlinked sender**
 
-1. `Linker.get_or_resolve_linked_user()` → cache first, then [`IdentiesClient.check_external_account`](../app/core/linker.py) on miss.
+1. `Linker.get_or_resolve_linked_user()` → cache first, then [`IdentiesClient.check_external_account`](https://github.com/tesserahq/conversa/blob/main/app/core/linker.py) on miss.
 2. Identies calls use a **service token**: `AuthTokenProvider().get_token()` (`IDENTIES_API_KEY` or Auth0 M2M fallback).
 3. `Linker.generate_link_token()` → `IdentiesClient.create_link_token(platform, external_user_id)`.
 4. Router returns a welcome message with `LINK_URL` (no LLM, no DB session for chat logic beyond what link flow needs).
@@ -116,11 +116,11 @@ Before routing, the plugin calls `Linker.get_linked_user()` as a cache lookup. I
 
 ### 5. LLM — Modela with delegated **user** token
 
-[`LLMRunner.run`](../app/workers/llm.py) requires `user_id` (from `session.user_id`).
+[`LLMRunner.run`](https://github.com/tesserahq/conversa/blob/main/app/workers/llm.py) requires `user_id` (from `session.user_id`).
 
 | Step | Auth type | Mechanism |
 |------|-----------|-----------|
-| Delegated token | User-scoped | [`MCPDelegatedTokenRepository.get_access_token`](../app/repositories/mcp_delegated_token_repository.py) |
+| Delegated token | User-scoped | [`MCPDelegatedTokenRepository.get_access_token`](https://github.com/tesserahq/conversa/blob/main/app/repositories/mcp_delegated_token_repository.py) |
 | M2M (internal) | Service | `M2MTokenClient().get_token_sync()` used only inside the repository to call Identies |
 | Exchange | User delegation | `IdentiesClient.exchange_token(user_id, requested_audience=MODELA_AUDIENCE, requested_scope=MODELA_SCOPES)` |
 | Modela call | User bearer | `ModelaClient(api_token=delegated_token).complete(...)` |
@@ -135,17 +135,17 @@ The delegated token is cached in Redis (`mcp_delegated_tokens` namespace) keyed 
 
 ### 6. Outbound reply
 
-[`TelegramPlugin.send`](../app/channels/plugins/telegram/plugin.py) uses the same bot token to `send_message` back to `chat_id`.
+[`TelegramPlugin.send`](https://github.com/tesserahq/conversa/blob/main/app/channels/plugins/telegram/plugin.py) uses the same bot token to `send_message` back to `chat_id`.
 
 ### 7. Account linked (async, related)
 
-When the user completes linking in Linden, Identies can emit `com.identies.external_account.linked` on NATS. [`process_nats_event_task`](../app/tasks/process_nats_event_task.py) sends a confirmation DM via the bot token and records it on the session. That path also does **not** use FastAPI JWT middleware.
+When the user completes linking in Linden, Identies can emit `com.identies.external_account.linked` on NATS. [`process_nats_event_task`](https://github.com/tesserahq/conversa/blob/main/app/tasks/process_nats_event_task.py) sends a confirmation DM via the bot token and records it on the session. That path also does **not** use FastAPI JWT middleware.
 
 ---
 
 ## REST API path (for comparison)
 
-Administrative and session HTTP APIs go through FastAPI middleware in [`create_app`](../app/main.py):
+Administrative and session HTTP APIs go through FastAPI middleware in [`create_app`](https://github.com/tesserahq/conversa/blob/main/app/main.py):
 
 ```mermaid
 flowchart TD
@@ -161,10 +161,10 @@ flowchart TD
 
 **Skipped paths** (no JWT): `/livez`, `/readyz`, `/docs`, `/metrics`, `/oauth/slack/callback`.
 
-**Typical protected route** (example: [`sessions_router`](../app/routers/sessions_router.py)):
+**Typical protected route** (example: [`sessions_router`](https://github.com/tesserahq/conversa/blob/main/app/routers/sessions_router.py)):
 
 1. `Depends(get_current_user)` — resolves JWT to a Tessera user.
-2. `Depends(rbac["read"])` — [`build_rbac_dependencies`](../app/auth/rbac.py) → `authorize(resource="conversa.session", action="read", domain="*")`.
+2. `Depends(rbac["read"])` — [`build_rbac_dependencies`](https://github.com/tesserahq/conversa/blob/main/app/auth/rbac.py) → `authorize(resource="conversa.session", action="read", domain="*")`.
 
 RBAC resources use the prefix `conversa.<resource>` (e.g. `conversa.session`, `conversa.mcp_server`). Actions: `create`, `read`, `update`, `delete`.
 
@@ -188,12 +188,12 @@ Telegram chat **does not** call these routers for inbound messages.
 
 | Concern | File |
 |---------|------|
-| Telegram inbound/outbound | [`app/channels/plugins/telegram/plugin.py`](../app/channels/plugins/telegram/plugin.py) |
-| Routing + linking gate | [`app/core/routing.py`](../app/core/routing.py), [`app/core/linker.py`](../app/core/linker.py) |
-| Modela + delegated auth | [`app/workers/llm.py`](../app/workers/llm.py), [`app/repositories/mcp_delegated_token_repository.py`](../app/repositories/mcp_delegated_token_repository.py) |
-| RBAC helpers | [`app/auth/rbac.py`](../app/auth/rbac.py) |
-| HTTP auth middleware | [`app/main.py`](../app/main.py) (Tessera SDK middleware) |
-| Linked-account NATS handler | [`app/tasks/process_nats_event_task.py`](../app/tasks/process_nats_event_task.py) |
+| Telegram inbound/outbound | [`app/channels/plugins/telegram/plugin.py`](https://github.com/tesserahq/conversa/blob/main/app/channels/plugins/telegram/plugin.py) |
+| Routing + linking gate | [`app/core/routing.py`](https://github.com/tesserahq/conversa/blob/main/app/core/routing.py), [`app/core/linker.py`](https://github.com/tesserahq/conversa/blob/main/app/core/linker.py) |
+| Modela + delegated auth | [`app/workers/llm.py`](https://github.com/tesserahq/conversa/blob/main/app/workers/llm.py), [`app/repositories/mcp_delegated_token_repository.py`](https://github.com/tesserahq/conversa/blob/main/app/repositories/mcp_delegated_token_repository.py) |
+| RBAC helpers | [`app/auth/rbac.py`](https://github.com/tesserahq/conversa/blob/main/app/auth/rbac.py) |
+| HTTP auth middleware | [`app/main.py`](https://github.com/tesserahq/conversa/blob/main/app/main.py) (Tessera SDK middleware) |
+| Linked-account NATS handler | [`app/tasks/process_nats_event_task.py`](https://github.com/tesserahq/conversa/blob/main/app/tasks/process_nats_event_task.py) |
 
 ---
 
