@@ -1,8 +1,6 @@
 site_name: Conversa Documentation
 site_description: Conversation generation service documentation
 
-docs_dir: .
-
 nav:
   - Home: conversa-context.md
   - Design: PYTHON_FASTAPI_CHAT_GATEWAY_DESIGN.md
@@ -15,7 +13,3 @@ nav:
 
 plugins:
   - techdocs-core
-
-exclude_docs: |
-  mkdocs.yml
-  phase2-context-snapshots.md
