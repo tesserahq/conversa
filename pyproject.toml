@@ -66,6 +66,7 @@ python-telegram-bot = "22.6"
 slack-bolt = ">=1.22.0"
 pydantic-ai = "^1.56.0"
 opentelemetry-instrumentation-celery = "0.63b1"
+prometheus-fastapi-instrumentator = "^8.0.2"
 
 [tool.poetry.dependencies.uvicorn]
 extras = [ "standard" ]
