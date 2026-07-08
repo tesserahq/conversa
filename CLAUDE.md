@@ -77,9 +77,8 @@ External: Tessera SDK, MCP servers, Redis, NATS
 2. Router normalizes message into `Envelope`
 3. Session context + user profile loaded from DB
 4. Context snapshot fetched (merged from registered context sources)
-5. LLM called (pydantic-ai) with context + available MCP tools
-6. Response routed back through channel plugin
-7. Message persisted; events published to NATS (if enabled)
+5. Response routed back through channel plugin
+6. Message persisted; events published to NATS (if enabled)
 
 ### Context Snapshot Flow
 
@@ -96,6 +95,7 @@ Context sources are external pull endpoints (Prometheus-style). A Celery Beat ta
 ## CI
 
 GitHub Actions runs on push/PR to `main`:
+
 1. Spins up PostgreSQL 18 + Redis 8
 2. `ruff` lint + `black` format check
 3. `pytest` full suite

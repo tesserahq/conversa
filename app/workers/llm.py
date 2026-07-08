@@ -88,15 +88,11 @@ class LLMRunner:
         msg: InboundMessage,
         history: Optional[List[dict[str, str]]] = None,
         context: Optional[dict[str, Any]] = None,
-        toolsets: Optional[List[Any]] = None,
         *,
         user_id: Optional[UUID] = None,
     ) -> str:
         if user_id is None:
             raise ValueError("LLM completion requires user_id for delegated auth")
-
-        if toolsets:
-            logger.debug("MCP toolsets present but Modela handles tools internally")
 
         messages = _build_completion_messages(
             self._system_prompt,

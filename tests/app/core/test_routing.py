@@ -101,11 +101,6 @@ async def test_route_to_llm_resolves_user_and_calls_llm(monkeypatch):
     monkeypatch.setattr(routing, "SessionManager", _FakeSessionManager)
     monkeypatch.setattr(router, "_load_context_for_user", lambda db, user_id: None)
 
-    async def _fake_toolsets(_db, _user_id):
-        return None
-
-    monkeypatch.setattr(router, "_get_toolsets_for_user", _fake_toolsets)
-
     outbound = await router.route_to_llm(msg, user_id=None)
 
     assert outbound.text == "assistant reply"
