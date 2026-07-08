@@ -5,6 +5,7 @@ from uuid import UUID
 
 from app.channels.envelope import InboundMessage, OutboundMessage
 from app.config import get_settings
+from app.infra.logging_config import get_logger
 from app.core.linker import Linker
 from app.repositories.context_snapshot_repository import ContextSnapshotRepository
 from app.repositories.session_manager import SessionManager
@@ -12,6 +13,8 @@ from app.tasks.context_sync_task import sync_context_for_user_task
 from app.utils.db.db_session_helper import db_session
 from app.workers.llm import LLMRunner, build_llm_runner_from_env
 import asyncio
+
+logger = get_logger("routing")
 
 WELCOME_MESSAGE = "Hello and welcome. Please click the link below to connect your {channel} account to your Linden account so we can continue. This link is valid for 10 minutes: {link_url}"
 LINK_RESOLUTION_ERROR_MESSAGE = "Sorry, we couldn't verify your linked account right now. Please try again in a moment."
@@ -44,6 +47,15 @@ class Router:
             session_id = session.id
             history = session_manager.get_history_for_llm(session_id, limit=50)
             context = self._load_context_for_user(db, session.user_id)
+            logger.info(
+                "Prepared LLM input for session=%s user_id=%s channel=%s history_messages=%d context_loaded=%s context_keys=%s",
+                session_id,
+                session.user_id,
+                msg.channel,
+                len(history),
+                context is not None,
+                sorted(context.keys()) if isinstance(context, dict) else [],
+            )
 
         reply_text = await self._llm.run(
             msg,
@@ -67,12 +79,20 @@ class Router:
     def _load_context_for_user(self, db: Any, user_id: Optional[UUID]) -> Optional[Any]:
         """Load latest context snapshot for the user; trigger sync if missing."""
         if not user_id:
+            logger.info("Skipping context load because user_id is missing")
             return None
         snapshot_repo = ContextSnapshotRepository(db)
         snapshot = snapshot_repo.get_latest_snapshot(user_id)
         if snapshot:
+            payload = snapshot.payload if isinstance(snapshot.payload, dict) else {}
+            logger.info(
+                "Loaded context snapshot for user_id=%s keys=%s",
+                user_id,
+                sorted(payload.keys()),
+            )
             return snapshot.payload
         sync_context_for_user_task.delay(str(user_id))
+        logger.info("No context snapshot found for user_id=%s; queued sync", user_id)
         return None
 
     def _create_link_outbound_message(self, msg: InboundMessage) -> OutboundMessage:

@@ -19,7 +19,11 @@ class SessionRepository(SoftDeleteRepository[Session]):
         super().__init__(db, Session)
 
     def _session_query(self) -> Query[Session]:
-        return self.db.query(Session).options(joinedload(Session.user))
+        return (
+            self.db.query(Session)
+            .options(joinedload(Session.user))
+            .order_by(Session.last_message_at.desc())
+        )
 
     def get_session(self, session_id: UUID) -> Optional[Session]:
         return self._session_query().filter(Session.id == session_id).first()

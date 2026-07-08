@@ -20,6 +20,26 @@ logger = get_logger()
 SYSTEM_PROMPT_NAME = "default"
 
 
+def _summarize_context(context: Optional[dict[str, Any]]) -> dict[str, Any]:
+    if not isinstance(context, dict):
+        return {"present": False, "keys": [], "section_sizes": {}}
+
+    section_sizes: dict[str, int | str] = {}
+    for key, value in context.items():
+        if isinstance(value, (list, dict)):
+            section_sizes[key] = len(value)
+        elif value is None:
+            section_sizes[key] = 0
+        else:
+            section_sizes[key] = "scalar"
+
+    return {
+        "present": True,
+        "keys": sorted(context.keys()),
+        "section_sizes": section_sizes,
+    }
+
+
 def _format_context_for_prompt(context: dict[str, Any]) -> str:
     """Format context snapshot for injection into system prompt."""
     parts = []
@@ -100,12 +120,27 @@ class LLMRunner:
             msg.text or "",
             context=context,
         )
+        context_summary = _summarize_context(context)
+        user_text_length = len((msg.text or "").strip())
+        logger.info(
+            "Dispatching Modela request model=%s user_id=%s channel=%s session_message_id=%s history_messages=%d completion_messages=%d user_text_length=%d media_items=%d context_present=%s context_keys=%s context_section_sizes=%s",
+            self._model_name,
+            user_id,
+            msg.channel,
+            msg.message_id,
+            len(history or []),
+            len(messages),
+            user_text_length,
+            len(msg.media),
+            context_summary["present"],
+            context_summary["keys"],
+            context_summary["section_sizes"],
+        )
         token = self._token_repo.get_access_token(
             user_id=user_id,
             audience=self._modela_audience,
             scopes=self._modela_scopes,
         )
-        logger.info(f"token: {token}")
         # Fail fast if Modela becomes unreachable; we run the call in a thread,
         # so `timeout` must be enforced by the SDK/HTTP layer.
         client_kwargs: dict[str, Any] = {"api_token": token, "timeout": 10}
@@ -120,9 +155,22 @@ class LLMRunner:
             messages=messages,
             project_id="*",
         )
+        logger.info(
+            "Received Modela response model=%s user_id=%s choices=%d",
+            self._model_name,
+            user_id,
+            len(response.choices),
+        )
         if not response.choices:
             raise ValueError("Modela returned no completion choices")
-        return response.choices[0].message.content
+        reply_text = response.choices[0].message.content
+        logger.info(
+            "Returning Modela reply model=%s user_id=%s reply_text_length=%d",
+            self._model_name,
+            user_id,
+            len(reply_text or ""),
+        )
+        return reply_text
 
 
 def build_llm_runner_from_env() -> LLMRunner:
