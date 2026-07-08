@@ -16,7 +16,7 @@ from rollbar.contrib.fastapi import ReporterMiddleware as RollbarMiddleware
 from fastapi_pagination import add_pagination
 from prometheus_fastapi_instrumentator import Instrumentator
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-from app.telemetry import setup_tracing
+from app.telemetry import setup_tracing, _patch_fastapi_route_details
 from app.exceptions.handlers import register_exception_handlers
 from app.infra.logging_config import get_logger
 from app.db import db_manager
@@ -181,6 +181,7 @@ app = create_app()
 settings = get_settings()
 if settings.otel_enabled:
     tracer_provider = setup_tracing()  # Or use env/config
+    _patch_fastapi_route_details()
     FastAPIInstrumentor.instrument_app(app, tracer_provider=tracer_provider)
     Instrumentator(
         excluded_handlers=["^/$", "/livez", "/readyz", "/metrics", "none"],
