@@ -106,7 +106,9 @@ class LLMRunner:
             scopes=self._modela_scopes,
         )
         logger.info(f"token: {token}")
-        client_kwargs: dict[str, Any] = {"api_token": token}
+        # Fail fast if Modela becomes unreachable; we run the call in a thread,
+        # so `timeout` must be enforced by the SDK/HTTP layer.
+        client_kwargs: dict[str, Any] = {"api_token": token, "timeout": 10}
         if self._modela_base_url is not None:
             client_kwargs["base_url"] = self._modela_base_url
         client = ModelaClient(**client_kwargs)
