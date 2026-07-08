@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import UUID
 
@@ -8,7 +7,6 @@ from app.channels.envelope import InboundMessage, OutboundMessage
 from app.config import get_settings
 from app.core.linker import Linker
 from app.repositories.context_snapshot_repository import ContextSnapshotRepository
-from app.utils.metrics import CONTEXT_SNAPSHOT_AGE_SECONDS
 from app.repositories.session_manager import SessionManager
 from app.tasks.context_sync_task import sync_context_for_user_task
 from app.utils.db.db_session_helper import db_session
@@ -67,16 +65,12 @@ class Router:
         return outbound
 
     def _load_context_for_user(self, db: Any, user_id: Optional[UUID]) -> Optional[Any]:
-        """Load latest context snapshot for the user; record metrics or trigger sync if missing."""
+        """Load latest context snapshot for the user; trigger sync if missing."""
         if not user_id:
             return None
         snapshot_repo = ContextSnapshotRepository(db)
         snapshot = snapshot_repo.get_latest_snapshot(user_id)
         if snapshot:
-            age_seconds = (
-                datetime.now(timezone.utc) - snapshot.generated_at
-            ).total_seconds()
-            CONTEXT_SNAPSHOT_AGE_SECONDS.labels(user_id=str(user_id)).set(age_seconds)
             return snapshot.payload
         sync_context_for_user_task.delay(str(user_id))
         return None

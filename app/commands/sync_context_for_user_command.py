@@ -12,7 +12,6 @@ from sqlalchemy.orm import Session
 from app.adapters.context_pack_fetcher import ContextPackFetcher, FetchResult
 from app.models.context_source import ContextSource, ContextSourceState
 from app.schemas.context_pack import MergeableContextPack
-from app.utils.metrics import CONTEXT_PACK_PAYLOAD_BYTES, CONTEXT_SYNC_TOTAL
 from app.repositories.context_merge_repository import ContextMergeRepository
 from app.repositories.context_snapshot_repository import ContextSnapshotRepository
 from app.repositories.context_source_repository import ContextSourceRepository
@@ -149,11 +148,7 @@ class SyncContextForUserCommand:
         state_svc: ContextSourceStateRepository,
         now: datetime,
     ) -> None:
-        """Handle fetch error: record metric, update state, log."""
-        CONTEXT_SYNC_TOTAL.labels(
-            source_id=source.source_id,
-            status="failure",
-        ).inc()
+        """Handle fetch error: update state, log."""
         state_svc.update_state(
             state,
             last_attempt_at=now,
@@ -192,14 +187,7 @@ class SyncContextForUserCommand:
         state_svc: ContextSourceStateRepository,
         now: datetime,
     ) -> MergeableContextPack:
-        """Handle successful fetch: record metric, update state, return pack."""
-        CONTEXT_SYNC_TOTAL.labels(
-            source_id=source.source_id,
-            status="success",
-        ).inc()
-        CONTEXT_PACK_PAYLOAD_BYTES.labels(
-            source_id=source.source_id,
-        ).observe(len(result.payload.model_dump_json().encode("utf-8")))
+        """Handle successful fetch: update state, return pack."""
         poll_interval = int(source.poll_interval_seconds)
         poll_delta = timedelta(seconds=poll_interval)
         state_svc.update_state(
