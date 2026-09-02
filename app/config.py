@@ -163,9 +163,6 @@ class Settings(BaseSettings):
     )
 
     # LLM / LiteLLM
-    llm_model: str = Field(
-        default="gpt-4o-mini", json_schema_extra={"env": "LLM_MODEL"}
-    )
     mcp_tools_enabled: bool = Field(
         default=False,
         json_schema_extra={"env": "MCP_TOOLS_ENABLED"},

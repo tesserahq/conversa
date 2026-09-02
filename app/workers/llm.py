@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import asyncio
 import json
-from typing import Any, List, Optional
+from typing import Any, AsyncIterator, List, Optional
 from uuid import UUID
 
 from tessera_sdk.clients.modela import CompletionMessage, ModelaClient
@@ -85,9 +84,15 @@ def _build_completion_messages(
 
 
 class LLMRunner:
+    """The only place in Conversa that talks to Modela.
+
+    Model/config selection is intentionally not exposed here: Modela resolves
+    its own default chat ModelConfig when no `model` is passed, so callers
+    never send one.
+    """
+
     def __init__(
         self,
-        model_name: str,
         system_prompt: Optional[str] = None,
         *,
         modela_audience: str,
@@ -95,22 +100,26 @@ class LLMRunner:
         token_repo: Optional[MCPDelegatedTokenRepository] = None,
         modela_base_url: Optional[str] = None,
     ) -> None:
-        logger.info("Initializing LLM runner with model %s", model_name)
-        self._model_name = model_name
+        logger.info("Initializing LLM runner")
         self._system_prompt = system_prompt or ""
         self._modela_audience = modela_audience
         self._modela_scopes = modela_scopes
         self._token_repo = token_repo or MCPDelegatedTokenRepository()
         self._modela_base_url = modela_base_url
 
-    async def run(
+    async def stream(
         self,
         msg: InboundMessage,
         history: Optional[List[dict[str, str]]] = None,
         context: Optional[dict[str, Any]] = None,
         *,
         user_id: Optional[UUID] = None,
-    ) -> str:
+    ) -> AsyncIterator[str]:
+        """Stream the assistant's reply as text deltas.
+
+        Raises ValueError if Modela's stream produces no chunks at all
+        (the streaming analogue of a non-streaming response with no choices).
+        """
         if user_id is None:
             raise ValueError("LLM completion requires user_id for delegated auth")
 
@@ -123,8 +132,7 @@ class LLMRunner:
         context_summary = _summarize_context(context)
         user_text_length = len((msg.text or "").strip())
         logger.info(
-            "Dispatching Modela request model=%s user_id=%s channel=%s session_message_id=%s history_messages=%d completion_messages=%d user_text_length=%d media_items=%d context_present=%s context_keys=%s context_section_sizes=%s",
-            self._model_name,
+            "Dispatching Modela streaming request user_id=%s channel=%s session_message_id=%s history_messages=%d completion_messages=%d user_text_length=%d media_items=%d context_present=%s context_keys=%s context_section_sizes=%s",
             user_id,
             msg.channel,
             msg.message_id,
@@ -141,50 +149,58 @@ class LLMRunner:
             audience=self._modela_audience,
             scopes=self._modela_scopes,
         )
-        # Fail fast if Modela becomes unreachable; we run the call in a thread,
-        # so `timeout` must be enforced by the SDK/HTTP layer.
         client_kwargs: dict[str, Any] = {"api_token": token, "timeout": 10}
         if self._modela_base_url is not None:
             client_kwargs["base_url"] = self._modela_base_url
         client = ModelaClient(**client_kwargs)
 
-        # TODO: I think this needs to be configured dynamicallly somewhere
-        # model=self._model_name,
-        response = await asyncio.to_thread(
-            client.complete,
-            messages=messages,
-            project_id="*",
-        )
+        chunk_count = 0
+        reply_length = 0
+        async for chunk in client.stream_complete(messages=messages, project_id="*"):
+            chunk_count += 1
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta.content
+            if delta:
+                reply_length += len(delta)
+                yield delta
+
         logger.info(
-            "Received Modela response model=%s user_id=%s choices=%d",
-            self._model_name,
+            "Finished Modela stream user_id=%s chunks=%d reply_text_length=%d",
             user_id,
-            len(response.choices),
+            chunk_count,
+            reply_length,
         )
-        if not response.choices:
+        if chunk_count == 0:
             raise ValueError("Modela returned no completion choices")
-        reply_text = response.choices[0].message.content
-        logger.info(
-            "Returning Modela reply model=%s user_id=%s reply_text_length=%d",
-            self._model_name,
-            user_id,
-            len(reply_text or ""),
-        )
-        return reply_text
+
+    async def run(
+        self,
+        msg: InboundMessage,
+        history: Optional[List[dict[str, str]]] = None,
+        context: Optional[dict[str, Any]] = None,
+        *,
+        user_id: Optional[UUID] = None,
+    ) -> str:
+        """Non-streaming convenience wrapper: joins the full streamed reply."""
+        parts: List[str] = []
+        async for delta in self.stream(
+            msg, history=history, context=context, user_id=user_id
+        ):
+            parts.append(delta)
+        return "".join(parts)
 
 
 def build_llm_runner_from_env() -> LLMRunner:
     settings = get_settings()
     logger.info(
-        "LLM runner config: model=%s, modela_audience=%s",
-        settings.llm_model,
+        "LLM runner config: modela_audience=%s",
         settings.modela_audience,
     )
 
     system_prompt = _get_system_prompt()
 
     return LLMRunner(
-        model_name=settings.llm_model,
         system_prompt=system_prompt,
         modela_audience=settings.modela_audience,
         modela_scopes=settings.modela_scopes,
