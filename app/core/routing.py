@@ -33,6 +33,10 @@ class Router:
     def __init__(self, llm: LLMRunner | None = None) -> None:
         self._llm = llm or build_llm_runner_from_env()
         self._linker = Linker()
+        # Strong references to in-flight streaming background tasks, so they
+        # aren't garbage-collected mid-run (asyncio only weakly tracks tasks
+        # otherwise). See stream_api_message.
+        self._background_tasks: set[asyncio.Task] = set()
 
     async def route_to_llm(
         self,
@@ -164,38 +168,63 @@ class Router:
 
         The session is resolved/created up front (so the caller has a
         session id available before streaming starts, e.g. for a response
-        header) and an async generator of deltas is returned separately.
-
-        Happy-path persistence only: the turn is saved once the generator
-        runs to completion. If the caller's HTTP response is torn down
-        before that happens (client disconnect), the turn is not saved —
-        disconnect-safe persistence is a follow-up (tesserahq/conversa#66).
+        header). Generation and persistence run as a background task
+        decoupled from the returned generator: if the caller stops
+        consuming (e.g. the client disconnects), the task keeps running to
+        completion and still persists whatever was generated, rather than
+        silently dropping content Modela was already paid to produce.
         """
         msg, resolved_session_id, history, context = await self._prepare_api_message(
             user_id, user_content, session_id
         )
 
-        async def _generate() -> AsyncIterator[str]:
-            parts: list[str] = []
-            async for delta in self._llm.stream(
-                msg, history=history, context=context, user_id=user_id
-            ):
-                parts.append(delta)
-                yield delta
-            reply_text = "".join(parts)
-            outbound = OutboundMessage(
-                channel=API_CHANNEL,
-                account_id=None,
-                chat_id=msg.chat_id,
-                thread_id=None,
-                text=reply_text,
-                reply_to=msg.message_id,
-                media=[],
-            )
-            with db_session() as db:
-                SessionManager(db).add_turn(resolved_session_id, msg, outbound)
+        queue: asyncio.Queue[tuple[str, Any]] = asyncio.Queue()
 
-        return resolved_session_id, _generate()
+        async def _produce() -> None:
+            parts: list[str] = []
+            error: Optional[BaseException] = None
+            try:
+                async for delta in self._llm.stream(
+                    msg, history=history, context=context, user_id=user_id
+                ):
+                    parts.append(delta)
+                    await queue.put(("delta", delta))
+            except Exception as exc:
+                error = exc
+                logger.exception(
+                    "Error while streaming API chat reply session=%s",
+                    resolved_session_id,
+                )
+            finally:
+                if parts:
+                    outbound = OutboundMessage(
+                        channel=API_CHANNEL,
+                        account_id=None,
+                        chat_id=msg.chat_id,
+                        thread_id=None,
+                        text="".join(parts),
+                        reply_to=msg.message_id,
+                        media=[],
+                    )
+                    with db_session() as db:
+                        SessionManager(db).add_turn(resolved_session_id, msg, outbound)
+                await queue.put(("error", error) if error else ("done", None))
+
+        task = asyncio.create_task(_produce())
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
+
+        async def _consume() -> AsyncIterator[str]:
+            while True:
+                kind, payload = await queue.get()
+                if kind == "delta":
+                    yield payload
+                elif kind == "done":
+                    return
+                else:  # kind == "error"
+                    raise payload
+
+        return resolved_session_id, _consume()
 
     def _get_owned_session(self, db: Any, session_id: UUID, user_id: UUID):
         """Look up a session by id, scoped to the requesting user.
