@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
+from app.routers.chat_router import chat_router
 from app.routers.context_sources_router import router as context_sources_router
 from app.routers.credentials_router import router as credentials_router
 from app.routers.oauth_router import router as oauth_router
@@ -159,6 +160,7 @@ def create_app(testing: bool = False, auth_middleware=None) -> FastAPI:
 
     # Chat gateway
     app.include_router(sessions_router)
+    app.include_router(chat_router)
     app.include_router(system_router)
     app.include_router(system_prompts_router)
     app.include_router(context_sources_router)

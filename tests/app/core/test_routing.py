@@ -105,3 +105,133 @@ async def test_route_to_llm_resolves_user_and_calls_llm(monkeypatch):
 
     assert outbound.text == "assistant reply"
     assert llm_calls[0]["user_id"] == resolved_user_id
+
+
+class _FakeLLMEcho:
+    async def run(self, *_args, **kwargs):
+        return "assistant reply"
+
+
+class _FakeSessionManagerForApi:
+    created_calls: list = []
+    add_turn_calls: list = []
+
+    def __init__(self, db):
+        self._db = db
+
+    def get_or_create_session(self, msg, user_id):
+        self.created_calls.append({"msg": msg, "user_id": user_id})
+        return SimpleNamespace(id="new-session", user_id=user_id, chat_id=msg.chat_id)
+
+    def get_history_for_llm(self, _session_id, limit=50):
+        return []
+
+    def add_turn(self, session_id, _msg, _outbound):
+        self.add_turn_calls.append(session_id)
+
+
+@pytest.mark.asyncio
+async def test_route_api_message_creates_new_session_when_no_session_id(monkeypatch):
+    user_id = uuid4()
+
+    @contextmanager
+    def _fake_db_session():
+        yield object()
+
+    fake_manager = _FakeSessionManagerForApi
+    fake_manager.created_calls = []
+    fake_manager.add_turn_calls = []
+
+    router = routing.Router(llm=_FakeLLMEcho())
+    monkeypatch.setattr(routing, "db_session", _fake_db_session)
+    monkeypatch.setattr(routing, "SessionManager", fake_manager)
+    monkeypatch.setattr(router, "_load_context_for_user", lambda db, user_id: None)
+
+    outbound, session_id = await router.route_api_message(
+        user_id=user_id, user_content="Hello there"
+    )
+
+    assert outbound.text == "assistant reply"
+    assert outbound.channel == routing.API_CHANNEL
+    assert session_id == "new-session"
+    assert fake_manager.created_calls[0]["user_id"] == user_id
+    assert fake_manager.created_calls[0]["msg"].text == "Hello there"
+    assert fake_manager.add_turn_calls == ["new-session"]
+
+
+@pytest.mark.asyncio
+async def test_route_api_message_reuses_owned_session(monkeypatch):
+    user_id = uuid4()
+    existing_session_id = uuid4()
+
+    @contextmanager
+    def _fake_db_session():
+        yield object()
+
+    class _FakeSessionRepo:
+        def __init__(self, db):
+            pass
+
+        def get_session(self, session_id):
+            assert session_id == existing_session_id
+            return SimpleNamespace(
+                id=existing_session_id, user_id=user_id, chat_id="existing-chat"
+            )
+
+    fake_manager = _FakeSessionManagerForApi
+    fake_manager.created_calls = []
+    fake_manager.add_turn_calls = []
+
+    router = routing.Router(llm=_FakeLLMEcho())
+    monkeypatch.setattr(routing, "db_session", _fake_db_session)
+    monkeypatch.setattr(routing, "SessionManager", fake_manager)
+    monkeypatch.setattr(routing, "SessionRepository", _FakeSessionRepo)
+    monkeypatch.setattr(router, "_load_context_for_user", lambda db, user_id: None)
+
+    outbound, session_id = await router.route_api_message(
+        user_id=user_id, user_content="Follow up", session_id=existing_session_id
+    )
+
+    assert session_id == existing_session_id
+    assert outbound.chat_id == "existing-chat"
+    # No new session was created since the existing one was reused.
+    assert fake_manager.created_calls == []
+    assert fake_manager.add_turn_calls == [existing_session_id]
+
+
+@pytest.mark.asyncio
+async def test_route_api_message_ignores_session_owned_by_another_user(monkeypatch):
+    user_id = uuid4()
+    other_users_session_id = uuid4()
+
+    @contextmanager
+    def _fake_db_session():
+        yield object()
+
+    class _FakeSessionRepo:
+        def __init__(self, db):
+            pass
+
+        def get_session(self, session_id):
+            return SimpleNamespace(
+                id=other_users_session_id, user_id=uuid4(), chat_id="not-yours"
+            )
+
+    fake_manager = _FakeSessionManagerForApi
+    fake_manager.created_calls = []
+    fake_manager.add_turn_calls = []
+
+    router = routing.Router(llm=_FakeLLMEcho())
+    monkeypatch.setattr(routing, "db_session", _fake_db_session)
+    monkeypatch.setattr(routing, "SessionManager", fake_manager)
+    monkeypatch.setattr(routing, "SessionRepository", _FakeSessionRepo)
+    monkeypatch.setattr(router, "_load_context_for_user", lambda db, user_id: None)
+
+    outbound, session_id = await router.route_api_message(
+        user_id=user_id, user_content="Hi", session_id=other_users_session_id
+    )
+
+    # A session_id belonging to someone else is treated as not found: a new
+    # session is created instead of reusing (or leaking) the other user's.
+    assert session_id == "new-session"
+    assert len(fake_manager.created_calls) == 1
