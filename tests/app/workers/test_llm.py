@@ -25,6 +25,17 @@ def _inbound(text: str) -> InboundMessage:
     )
 
 
+def _chunk(content: str | None = None, finish_reason: str | None = None):
+    return SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                delta=SimpleNamespace(content=content),
+                finish_reason=finish_reason,
+            )
+        ]
+    )
+
+
 def test_build_completion_messages_ordering_and_roles():
     messages = _build_completion_messages(
         system_prompt="You are helpful.",
@@ -61,7 +72,6 @@ def test_build_completion_messages_skips_empty_content():
 @pytest.mark.asyncio
 async def test_run_requires_user_id():
     runner = LLMRunner(
-        model_name="test-model",
         system_prompt="Sys",
         modela_audience="modela",
         modela_scopes="modela:chat:complete",
@@ -73,10 +83,24 @@ async def test_run_requires_user_id():
 
 
 @pytest.mark.asyncio
-async def test_run_uses_delegated_token_and_modela_complete(monkeypatch):
+async def test_stream_requires_user_id():
+    runner = LLMRunner(
+        system_prompt="Sys",
+        modela_audience="modela",
+        modela_scopes="modela:chat:complete",
+        token_repo=_FakeTokenRepo("token"),
+    )
+    msg = _inbound("Hello")
+    with pytest.raises(ValueError, match="user_id"):
+        async for _ in runner.stream(msg):
+            pass
+
+
+@pytest.mark.asyncio
+async def test_run_uses_delegated_token_and_joins_stream_deltas(monkeypatch):
     user_id = uuid4()
     token_calls: list[dict] = []
-    complete_calls: list[dict] = []
+    stream_calls: list[dict] = []
 
     class _TrackingTokenRepo:
         def get_access_token(self, **kwargs):
@@ -85,20 +109,17 @@ async def test_run_uses_delegated_token_and_modela_complete(monkeypatch):
 
     class _FakeModelaClient:
         def __init__(self, **kwargs):
-            complete_calls.append({"init": kwargs})
+            stream_calls.append({"init": kwargs})
 
-        def complete(self, **kwargs):
-            complete_calls.append({"complete": kwargs})
-            return SimpleNamespace(
-                choices=[
-                    SimpleNamespace(message=SimpleNamespace(content="Modela reply"))
-                ]
-            )
+        async def stream_complete(self, **kwargs):
+            stream_calls.append({"stream_complete": kwargs})
+            for content in ("Modela ", "reply"):
+                yield _chunk(content=content)
+            yield _chunk(finish_reason="stop")
 
     monkeypatch.setattr(llm_module, "ModelaClient", _FakeModelaClient)
 
     runner = LLMRunner(
-        model_name="gpt-4o-mini",
         system_prompt="Be concise.",
         modela_audience="modela",
         modela_scopes="modela:chat:complete",
@@ -119,28 +140,54 @@ async def test_run_uses_delegated_token_and_modela_complete(monkeypatch):
             "scopes": "modela:chat:complete",
         }
     ]
-    assert complete_calls[0]["init"]["api_token"] == "delegated-user-token"
-    assert complete_calls[0]["init"]["timeout"] == 10
-    complete = complete_calls[1]["complete"]
-    assert complete["project_id"] == "*"
-    assert complete["messages"][0].role == "system"
-    assert complete["messages"][-1].role == "user"
-    assert complete["messages"][-1].content == "What is up?"
+    assert stream_calls[0]["init"]["api_token"] == "delegated-user-token"
+    assert stream_calls[0]["init"]["timeout"] == 10
+    stream_complete = stream_calls[1]["stream_complete"]
+    assert stream_complete["project_id"] == "*"
+    assert "model" not in stream_complete
+    assert stream_complete["messages"][0].role == "system"
+    assert stream_complete["messages"][-1].role == "user"
+    assert stream_complete["messages"][-1].content == "What is up?"
 
 
 @pytest.mark.asyncio
-async def test_run_raises_when_modela_returns_no_choices(monkeypatch):
+async def test_stream_yields_deltas_in_order(monkeypatch):
+    class _FakeModelaClient:
+        def __init__(self, **kwargs):
+            pass
+
+        async def stream_complete(self, **kwargs):
+            for content in ("Hel", "lo"):
+                yield _chunk(content=content)
+            yield _chunk(finish_reason="stop")
+
+    monkeypatch.setattr(llm_module, "ModelaClient", _FakeModelaClient)
+
+    runner = LLMRunner(
+        system_prompt="s",
+        modela_audience="modela",
+        modela_scopes="scope",
+        token_repo=_FakeTokenRepo("t"),
+    )
+    msg = _inbound("hi")
+    deltas = [d async for d in runner.stream(msg, user_id=uuid4())]
+
+    assert deltas == ["Hel", "lo"]
+
+
+@pytest.mark.asyncio
+async def test_run_raises_when_modela_stream_is_empty(monkeypatch):
     class _EmptyModelaClient:
         def __init__(self, **kwargs):
             pass
 
-        def complete(self, **kwargs):
-            return SimpleNamespace(choices=[])
+        async def stream_complete(self, **kwargs):
+            return
+            yield  # pragma: no cover - makes this an async generator
 
     monkeypatch.setattr(llm_module, "ModelaClient", _EmptyModelaClient)
 
     runner = LLMRunner(
-        model_name="m",
         system_prompt="s",
         modela_audience="modela",
         modela_scopes="scope",
