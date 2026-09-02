@@ -111,6 +111,10 @@ class _FakeLLMEcho:
     async def run(self, *_args, **kwargs):
         return "assistant reply"
 
+    async def stream(self, *_args, **kwargs):
+        for delta in ("assistant ", "reply"):
+            yield delta
+
 
 class _FakeSessionManagerForApi:
     created_calls: list = []
@@ -235,3 +239,114 @@ async def test_route_api_message_ignores_session_owned_by_another_user(monkeypat
     # session is created instead of reusing (or leaking) the other user's.
     assert session_id == "new-session"
     assert len(fake_manager.created_calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_stream_api_message_yields_deltas_and_persists_on_completion(
+    monkeypatch,
+):
+    user_id = uuid4()
+
+    @contextmanager
+    def _fake_db_session():
+        yield object()
+
+    fake_manager = _FakeSessionManagerForApi
+    fake_manager.created_calls = []
+    fake_manager.add_turn_calls = []
+
+    router = routing.Router(llm=_FakeLLMEcho())
+    monkeypatch.setattr(routing, "db_session", _fake_db_session)
+    monkeypatch.setattr(routing, "SessionManager", fake_manager)
+    monkeypatch.setattr(router, "_load_context_for_user", lambda db, user_id: None)
+
+    session_id, delta_gen = await router.stream_api_message(
+        user_id=user_id, user_content="Hello there"
+    )
+
+    # Session is resolved up front, before any deltas are consumed.
+    assert session_id == "new-session"
+    assert fake_manager.add_turn_calls == []
+
+    deltas = [d async for d in delta_gen]
+
+    assert deltas == ["assistant ", "reply"]
+    # Persisted only once the generator is fully drained.
+    assert fake_manager.add_turn_calls == ["new-session"]
+
+
+@pytest.mark.asyncio
+async def test_stream_api_message_persists_even_if_consumer_disconnects_early(
+    monkeypatch,
+):
+    """Generation/persistence run as a background task decoupled from the
+    returned generator: closing the generator early (simulating a client
+    disconnect) must not stop the background task from finishing and
+    persisting whatever was generated.
+    """
+    user_id = uuid4()
+
+    @contextmanager
+    def _fake_db_session():
+        yield object()
+
+    fake_manager = _FakeSessionManagerForApi
+    fake_manager.created_calls = []
+    fake_manager.add_turn_calls = []
+
+    router = routing.Router(llm=_FakeLLMEcho())
+    monkeypatch.setattr(routing, "db_session", _fake_db_session)
+    monkeypatch.setattr(routing, "SessionManager", fake_manager)
+    monkeypatch.setattr(router, "_load_context_for_user", lambda db, user_id: None)
+
+    _session_id, delta_gen = await router.stream_api_message(
+        user_id=user_id, user_content="Hello there"
+    )
+    background_task = next(iter(router._background_tasks))
+
+    await delta_gen.__anext__()  # consume only the first delta
+    await delta_gen.aclose()  # simulate the client disconnecting
+
+    # The background task is independent of the (now-closed) consumer
+    # generator, so it keeps running to completion on its own.
+    await background_task
+
+    assert fake_manager.add_turn_calls == ["new-session"]
+
+
+@pytest.mark.asyncio
+async def test_stream_api_message_persists_partial_output_and_reraises_on_error(
+    monkeypatch,
+):
+    user_id = uuid4()
+
+    @contextmanager
+    def _fake_db_session():
+        yield object()
+
+    class _FailingLLM:
+        async def stream(self, *_args, **kwargs):
+            yield "partial "
+            raise RuntimeError("Modela dropped the connection")
+
+    fake_manager = _FakeSessionManagerForApi
+    fake_manager.created_calls = []
+    fake_manager.add_turn_calls = []
+
+    router = routing.Router(llm=_FailingLLM())
+    monkeypatch.setattr(routing, "db_session", _fake_db_session)
+    monkeypatch.setattr(routing, "SessionManager", fake_manager)
+    monkeypatch.setattr(router, "_load_context_for_user", lambda db, user_id: None)
+
+    _session_id, delta_gen = await router.stream_api_message(
+        user_id=user_id, user_content="Hello there"
+    )
+
+    deltas = []
+    with pytest.raises(RuntimeError, match="Modela dropped the connection"):
+        async for delta in delta_gen:
+            deltas.append(delta)
+
+    assert deltas == ["partial "]
+    # The partial reply generated before the error is still persisted.
+    assert fake_manager.add_turn_calls == ["new-session"]

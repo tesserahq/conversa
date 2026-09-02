@@ -1,5 +1,6 @@
 import logging
 from contextlib import asynccontextmanager
+from typing import Optional
 
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -98,6 +99,13 @@ class EndpointFilter(logging.Filter):
 logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
 
 
+def parse_cors_allowed_origins(raw: Optional[str]) -> list[str]:
+    """Comma-separated origins -> a list, dropping blanks. Unset -> no origins."""
+    if not raw:
+        return []
+    return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
+
 def create_app(testing: bool = False, auth_middleware=None) -> FastAPI:
     logger = get_logger()
     settings = get_settings()
@@ -144,13 +152,12 @@ def create_app(testing: bool = False, auth_middleware=None) -> FastAPI:
         if auth_middleware:
             app.add_middleware(auth_middleware)
 
-    # TODO: Restrict this to the allowed origins
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # Puedes restringir esto a dominios específicos
+        allow_origins=parse_cors_allowed_origins(settings.cors_allowed_origins),
         allow_credentials=True,
-        allow_methods=["*"],  # Permitir todos los métodos (GET, POST, etc.)
-        allow_headers=["*"],  # Permitir todos los headers
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
     register_exception_handlers(app)
