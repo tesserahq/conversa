@@ -6,16 +6,20 @@ import json
 import time
 import uuid
 from typing import Any, AsyncIterator, Optional
-from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
 from tessera_sdk.server.dependencies.auth import get_current_user
 
 from app.auth.rbac import build_rbac_dependencies
 from app.core.rate_limit import enforce_user_rate_limit
 from app.core.routing import Router
+from app.schemas.chat import (
+    ChatCompletionChoiceOut,
+    ChatCompletionCreate,
+    ChatCompletionMessageOut,
+    ChatCompletionResponseOut,
+)
 
 chat_router = APIRouter(tags=["Chat"])
 
@@ -40,41 +44,6 @@ RESOURCE_CHAT = "chat"
 rbac = build_rbac_dependencies(resource=RESOURCE_CHAT, domain_resolver=infer_domain)
 
 SESSION_ID_HEADER = "X-Conversa-Session-Id"
-
-
-class ChatMessageInput(BaseModel):
-    role: str
-    content: str
-
-
-class ChatCompletionCreate(BaseModel):
-    """OpenAI-standard shape, plus an optional session_id for Conversa's
-    server-side session continuity. `model` is intentionally not accepted:
-    model/config selection stays server-side (Modela's default chat config).
-    """
-
-    messages: list[ChatMessageInput] = Field(min_length=1)
-    stream: bool = False
-    session_id: Optional[UUID] = None
-
-
-class ChatCompletionMessageOut(BaseModel):
-    role: str
-    content: str
-
-
-class ChatCompletionChoiceOut(BaseModel):
-    index: int
-    message: ChatCompletionMessageOut
-    finish_reason: str
-
-
-class ChatCompletionResponseOut(BaseModel):
-    id: str
-    object: str
-    created: int
-    model: str
-    choices: list[ChatCompletionChoiceOut]
 
 
 async def _sse_chunks(
