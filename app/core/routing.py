@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, AsyncIterator, Optional
 from uuid import UUID, uuid4
 
 from app.channels.envelope import InboundMessage, OutboundMessage
@@ -33,6 +33,10 @@ class Router:
     def __init__(self, llm: LLMRunner | None = None) -> None:
         self._llm = llm or build_llm_runner_from_env()
         self._linker = Linker()
+        # Strong references to in-flight streaming background tasks, so they
+        # aren't garbage-collected mid-run (asyncio only weakly tracks tasks
+        # otherwise). See stream_api_message.
+        self._background_tasks: set[asyncio.Task] = set()
 
     async def route_to_llm(
         self,
@@ -83,18 +87,15 @@ class Router:
             SessionManager(db).add_turn(session_id, msg, outbound)
         return outbound
 
-    async def route_api_message(
+    async def _prepare_api_message(
         self,
         user_id: UUID,
         user_content: str,
         session_id: Optional[UUID] = None,
-    ) -> tuple[OutboundMessage, UUID]:
-        """Route a direct chat-API message for an already-authenticated user.
-
-        Unlike route_to_llm, there is no channel webhook or Linker involved:
-        the caller is identified up front via their Tessera JWT. Reuses the
-        same SessionManager/LLMRunner plumbing as the channel path so
-        session history and context-snapshot behavior stay identical.
+    ) -> tuple[InboundMessage, UUID, list[dict], Optional[Any]]:
+        """Resolve/create the session for a direct API message and load its
+        history + context snapshot. Shared by the non-streaming and
+        streaming API entry points below.
         """
         with db_session() as db:
             session_manager = SessionManager(db)
@@ -120,7 +121,24 @@ class Router:
                 len(history),
                 context is not None,
             )
+        return msg, resolved_session_id, history, context
 
+    async def route_api_message(
+        self,
+        user_id: UUID,
+        user_content: str,
+        session_id: Optional[UUID] = None,
+    ) -> tuple[OutboundMessage, UUID]:
+        """Route a direct chat-API message for an already-authenticated user.
+
+        Unlike route_to_llm, there is no channel webhook or Linker involved:
+        the caller is identified up front via their Tessera JWT. Reuses the
+        same SessionManager/LLMRunner plumbing as the channel path so
+        session history and context-snapshot behavior stay identical.
+        """
+        msg, resolved_session_id, history, context = await self._prepare_api_message(
+            user_id, user_content, session_id
+        )
         reply_text = await self._llm.run(
             msg,
             history=history,
@@ -139,6 +157,74 @@ class Router:
         with db_session() as db:
             SessionManager(db).add_turn(resolved_session_id, msg, outbound)
         return outbound, resolved_session_id
+
+    async def stream_api_message(
+        self,
+        user_id: UUID,
+        user_content: str,
+        session_id: Optional[UUID] = None,
+    ) -> tuple[UUID, AsyncIterator[str]]:
+        """Like route_api_message, but streams the reply as text deltas.
+
+        The session is resolved/created up front (so the caller has a
+        session id available before streaming starts, e.g. for a response
+        header). Generation and persistence run as a background task
+        decoupled from the returned generator: if the caller stops
+        consuming (e.g. the client disconnects), the task keeps running to
+        completion and still persists whatever was generated, rather than
+        silently dropping content Modela was already paid to produce.
+        """
+        msg, resolved_session_id, history, context = await self._prepare_api_message(
+            user_id, user_content, session_id
+        )
+
+        queue: asyncio.Queue[tuple[str, Any]] = asyncio.Queue()
+
+        async def _produce() -> None:
+            parts: list[str] = []
+            error: Optional[BaseException] = None
+            try:
+                async for delta in self._llm.stream(
+                    msg, history=history, context=context, user_id=user_id
+                ):
+                    parts.append(delta)
+                    await queue.put(("delta", delta))
+            except Exception as exc:
+                error = exc
+                logger.exception(
+                    "Error while streaming API chat reply session=%s",
+                    resolved_session_id,
+                )
+            finally:
+                if parts:
+                    outbound = OutboundMessage(
+                        channel=API_CHANNEL,
+                        account_id=None,
+                        chat_id=msg.chat_id,
+                        thread_id=None,
+                        text="".join(parts),
+                        reply_to=msg.message_id,
+                        media=[],
+                    )
+                    with db_session() as db:
+                        SessionManager(db).add_turn(resolved_session_id, msg, outbound)
+                await queue.put(("error", error) if error else ("done", None))
+
+        task = asyncio.create_task(_produce())
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
+
+        async def _consume() -> AsyncIterator[str]:
+            while True:
+                kind, payload = await queue.get()
+                if kind == "delta":
+                    yield payload
+                elif kind == "done":
+                    return
+                else:  # kind == "error"
+                    raise payload
+
+        return resolved_session_id, _consume()
 
     def _get_owned_session(self, db: Any, session_id: UUID, user_id: UUID):
         """Look up a session by id, scoped to the requesting user.
