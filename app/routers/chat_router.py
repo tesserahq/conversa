@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import time
 import uuid
-from typing import Any, Optional
+from typing import Any, AsyncIterator, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from tessera_sdk.server.dependencies.auth import get_current_user
 
@@ -72,6 +74,44 @@ class ChatCompletionResponseOut(BaseModel):
     choices: list[ChatCompletionChoiceOut]
 
 
+async def _sse_chunks(
+    delta_gen: AsyncIterator[str], completion_id: str, created_ts: int
+) -> AsyncIterator[str]:
+    """Render text deltas as OpenAI chat.completion.chunk SSE events,
+    matching the shape Modela's own /chat/completions already emits.
+    """
+    first = True
+    async for delta in delta_gen:
+        chunk = {
+            "id": completion_id,
+            "object": "chat.completion.chunk",
+            "created": created_ts,
+            "model": "conversa",
+            "choices": [
+                {
+                    "index": 0,
+                    "delta": (
+                        {"role": "assistant", "content": delta}
+                        if first
+                        else {"content": delta}
+                    ),
+                    "finish_reason": None,
+                }
+            ],
+        }
+        first = False
+        yield f"data: {json.dumps(chunk)}\n\n"
+    final = {
+        "id": completion_id,
+        "object": "chat.completion.chunk",
+        "created": created_ts,
+        "model": "conversa",
+        "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+    }
+    yield f"data: {json.dumps(final)}\n\n"
+    yield "data: [DONE]\n\n"
+
+
 @chat_router.post(
     "/chat/completions",
     response_model=ChatCompletionResponseOut,
@@ -82,15 +122,23 @@ async def create_chat_completion(
     _authorized: bool = Depends(rbac["create"]),
     current_user: Any = Depends(get_current_user),
     router: Router = Depends(get_router),
-) -> ChatCompletionResponseOut:
+):
+    user_content = payload.messages[-1].content
+
     if payload.stream:
-        # Streaming support lands in a follow-up (tesserahq/conversa#65).
-        raise HTTPException(
-            status_code=422,
-            detail="stream=true is not yet supported on this endpoint.",
+        session_id, delta_gen = await router.stream_api_message(
+            user_id=current_user.id,
+            user_content=user_content,
+            session_id=payload.session_id,
+        )
+        completion_id = f"chatcmpl-{uuid.uuid4().hex}"
+        created_ts = int(time.time())
+        return StreamingResponse(
+            _sse_chunks(delta_gen, completion_id, created_ts),
+            media_type="text/event-stream",
+            headers={SESSION_ID_HEADER: str(session_id)},
         )
 
-    user_content = payload.messages[-1].content
     outbound, session_id = await router.route_api_message(
         user_id=current_user.id,
         user_content=user_content,

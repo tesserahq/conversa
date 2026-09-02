@@ -111,6 +111,10 @@ class _FakeLLMEcho:
     async def run(self, *_args, **kwargs):
         return "assistant reply"
 
+    async def stream(self, *_args, **kwargs):
+        for delta in ("assistant ", "reply"):
+            yield delta
+
 
 class _FakeSessionManagerForApi:
     created_calls: list = []
@@ -235,3 +239,70 @@ async def test_route_api_message_ignores_session_owned_by_another_user(monkeypat
     # session is created instead of reusing (or leaking) the other user's.
     assert session_id == "new-session"
     assert len(fake_manager.created_calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_stream_api_message_yields_deltas_and_persists_on_completion(
+    monkeypatch,
+):
+    user_id = uuid4()
+
+    @contextmanager
+    def _fake_db_session():
+        yield object()
+
+    fake_manager = _FakeSessionManagerForApi
+    fake_manager.created_calls = []
+    fake_manager.add_turn_calls = []
+
+    router = routing.Router(llm=_FakeLLMEcho())
+    monkeypatch.setattr(routing, "db_session", _fake_db_session)
+    monkeypatch.setattr(routing, "SessionManager", fake_manager)
+    monkeypatch.setattr(router, "_load_context_for_user", lambda db, user_id: None)
+
+    session_id, delta_gen = await router.stream_api_message(
+        user_id=user_id, user_content="Hello there"
+    )
+
+    # Session is resolved up front, before any deltas are consumed.
+    assert session_id == "new-session"
+    assert fake_manager.add_turn_calls == []
+
+    deltas = [d async for d in delta_gen]
+
+    assert deltas == ["assistant ", "reply"]
+    # Persisted only once the generator is fully drained.
+    assert fake_manager.add_turn_calls == ["new-session"]
+
+
+@pytest.mark.asyncio
+async def test_stream_api_message_does_not_persist_if_generator_not_drained(
+    monkeypatch,
+):
+    """Happy-path-only scope for this method: if the caller stops consuming
+    the generator early (e.g. a dropped connection), nothing is persisted.
+    Disconnect-safe persistence is a separate follow-up (tesserahq/conversa#66).
+    """
+    user_id = uuid4()
+
+    @contextmanager
+    def _fake_db_session():
+        yield object()
+
+    fake_manager = _FakeSessionManagerForApi
+    fake_manager.created_calls = []
+    fake_manager.add_turn_calls = []
+
+    router = routing.Router(llm=_FakeLLMEcho())
+    monkeypatch.setattr(routing, "db_session", _fake_db_session)
+    monkeypatch.setattr(routing, "SessionManager", fake_manager)
+    monkeypatch.setattr(router, "_load_context_for_user", lambda db, user_id: None)
+
+    _session_id, delta_gen = await router.stream_api_message(
+        user_id=user_id, user_content="Hello there"
+    )
+
+    await delta_gen.__anext__()  # consume only the first delta
+    await delta_gen.aclose()
+
+    assert fake_manager.add_turn_calls == []

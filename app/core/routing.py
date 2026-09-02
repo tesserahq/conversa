@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, AsyncIterator, Optional
 from uuid import UUID, uuid4
 
 from app.channels.envelope import InboundMessage, OutboundMessage
@@ -83,18 +83,15 @@ class Router:
             SessionManager(db).add_turn(session_id, msg, outbound)
         return outbound
 
-    async def route_api_message(
+    async def _prepare_api_message(
         self,
         user_id: UUID,
         user_content: str,
         session_id: Optional[UUID] = None,
-    ) -> tuple[OutboundMessage, UUID]:
-        """Route a direct chat-API message for an already-authenticated user.
-
-        Unlike route_to_llm, there is no channel webhook or Linker involved:
-        the caller is identified up front via their Tessera JWT. Reuses the
-        same SessionManager/LLMRunner plumbing as the channel path so
-        session history and context-snapshot behavior stay identical.
+    ) -> tuple[InboundMessage, UUID, list[dict], Optional[Any]]:
+        """Resolve/create the session for a direct API message and load its
+        history + context snapshot. Shared by the non-streaming and
+        streaming API entry points below.
         """
         with db_session() as db:
             session_manager = SessionManager(db)
@@ -120,7 +117,24 @@ class Router:
                 len(history),
                 context is not None,
             )
+        return msg, resolved_session_id, history, context
 
+    async def route_api_message(
+        self,
+        user_id: UUID,
+        user_content: str,
+        session_id: Optional[UUID] = None,
+    ) -> tuple[OutboundMessage, UUID]:
+        """Route a direct chat-API message for an already-authenticated user.
+
+        Unlike route_to_llm, there is no channel webhook or Linker involved:
+        the caller is identified up front via their Tessera JWT. Reuses the
+        same SessionManager/LLMRunner plumbing as the channel path so
+        session history and context-snapshot behavior stay identical.
+        """
+        msg, resolved_session_id, history, context = await self._prepare_api_message(
+            user_id, user_content, session_id
+        )
         reply_text = await self._llm.run(
             msg,
             history=history,
@@ -139,6 +153,49 @@ class Router:
         with db_session() as db:
             SessionManager(db).add_turn(resolved_session_id, msg, outbound)
         return outbound, resolved_session_id
+
+    async def stream_api_message(
+        self,
+        user_id: UUID,
+        user_content: str,
+        session_id: Optional[UUID] = None,
+    ) -> tuple[UUID, AsyncIterator[str]]:
+        """Like route_api_message, but streams the reply as text deltas.
+
+        The session is resolved/created up front (so the caller has a
+        session id available before streaming starts, e.g. for a response
+        header) and an async generator of deltas is returned separately.
+
+        Happy-path persistence only: the turn is saved once the generator
+        runs to completion. If the caller's HTTP response is torn down
+        before that happens (client disconnect), the turn is not saved —
+        disconnect-safe persistence is a follow-up (tesserahq/conversa#66).
+        """
+        msg, resolved_session_id, history, context = await self._prepare_api_message(
+            user_id, user_content, session_id
+        )
+
+        async def _generate() -> AsyncIterator[str]:
+            parts: list[str] = []
+            async for delta in self._llm.stream(
+                msg, history=history, context=context, user_id=user_id
+            ):
+                parts.append(delta)
+                yield delta
+            reply_text = "".join(parts)
+            outbound = OutboundMessage(
+                channel=API_CHANNEL,
+                account_id=None,
+                chat_id=msg.chat_id,
+                thread_id=None,
+                text=reply_text,
+                reply_to=msg.message_id,
+                media=[],
+            )
+            with db_session() as db:
+                SessionManager(db).add_turn(resolved_session_id, msg, outbound)
+
+        return resolved_session_id, _generate()
 
     def _get_owned_session(self, db: Any, session_id: UUID, user_id: UUID):
         """Look up a session by id, scoped to the requesting user.
