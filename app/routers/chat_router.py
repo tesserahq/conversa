@@ -14,9 +14,12 @@ from pydantic import BaseModel, Field
 from tessera_sdk.server.dependencies.auth import get_current_user
 
 from app.auth.rbac import build_rbac_dependencies
+from app.core.rate_limit import enforce_user_rate_limit
 from app.core.routing import Router
 
 chat_router = APIRouter(tags=["Chat"])
+
+_rate_limit_chat = enforce_user_rate_limit("chat")
 
 
 def get_router() -> Router:
@@ -120,6 +123,7 @@ async def create_chat_completion(
     payload: ChatCompletionCreate,
     response: Response,
     _authorized: bool = Depends(rbac["create"]),
+    _rate_limited: None = Depends(_rate_limit_chat),
     current_user: Any = Depends(get_current_user),
     router: Router = Depends(get_router),
 ):
