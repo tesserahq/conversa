@@ -276,12 +276,13 @@ async def test_stream_api_message_yields_deltas_and_persists_on_completion(
 
 
 @pytest.mark.asyncio
-async def test_stream_api_message_does_not_persist_if_generator_not_drained(
+async def test_stream_api_message_persists_even_if_consumer_disconnects_early(
     monkeypatch,
 ):
-    """Happy-path-only scope for this method: if the caller stops consuming
-    the generator early (e.g. a dropped connection), nothing is persisted.
-    Disconnect-safe persistence is a separate follow-up (tesserahq/conversa#66).
+    """Generation/persistence run as a background task decoupled from the
+    returned generator: closing the generator early (simulating a client
+    disconnect) must not stop the background task from finishing and
+    persisting whatever was generated.
     """
     user_id = uuid4()
 
@@ -301,8 +302,51 @@ async def test_stream_api_message_does_not_persist_if_generator_not_drained(
     _session_id, delta_gen = await router.stream_api_message(
         user_id=user_id, user_content="Hello there"
     )
+    background_task = next(iter(router._background_tasks))
 
     await delta_gen.__anext__()  # consume only the first delta
-    await delta_gen.aclose()
+    await delta_gen.aclose()  # simulate the client disconnecting
 
-    assert fake_manager.add_turn_calls == []
+    # The background task is independent of the (now-closed) consumer
+    # generator, so it keeps running to completion on its own.
+    await background_task
+
+    assert fake_manager.add_turn_calls == ["new-session"]
+
+
+@pytest.mark.asyncio
+async def test_stream_api_message_persists_partial_output_and_reraises_on_error(
+    monkeypatch,
+):
+    user_id = uuid4()
+
+    @contextmanager
+    def _fake_db_session():
+        yield object()
+
+    class _FailingLLM:
+        async def stream(self, *_args, **kwargs):
+            yield "partial "
+            raise RuntimeError("Modela dropped the connection")
+
+    fake_manager = _FakeSessionManagerForApi
+    fake_manager.created_calls = []
+    fake_manager.add_turn_calls = []
+
+    router = routing.Router(llm=_FailingLLM())
+    monkeypatch.setattr(routing, "db_session", _fake_db_session)
+    monkeypatch.setattr(routing, "SessionManager", fake_manager)
+    monkeypatch.setattr(router, "_load_context_for_user", lambda db, user_id: None)
+
+    _session_id, delta_gen = await router.stream_api_message(
+        user_id=user_id, user_content="Hello there"
+    )
+
+    deltas = []
+    with pytest.raises(RuntimeError, match="Modela dropped the connection"):
+        async for delta in delta_gen:
+            deltas.append(delta)
+
+    assert deltas == ["partial "]
+    # The partial reply generated before the error is still persisted.
+    assert fake_manager.add_turn_calls == ["new-session"]
