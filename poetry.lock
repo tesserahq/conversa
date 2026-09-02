@@ -4276,6 +4276,7 @@ develop = false
 cryptography = "^50.0.0"
 fastapi = ">=v0.138.2"
 faststream = {version = "^0.7.0", extras = ["nats"]}
+httpx = "^0.28.1"
 jinja2 = "^3.1.6"
 opentelemetry-instrumentation-sqlalchemy = ">=0.63b0,<0.65"
 opentelemetry-sdk = ">=1.42.0,<2.0.0"
@@ -4291,7 +4292,7 @@ urllib3 = ">=1.26.0"
 type = "git"
 url = "https://github.com/tesserahq/tessera-sdk-py.git"
 reference = "main"
-resolved_reference = "3bb0a68967b00a3409c662ba705f654200f306ca"
+resolved_reference = "db321199301ac8494c8d6b61c5d3c09c0cb1af85"
 
 [[package]]
 name = "typing-extensions"
