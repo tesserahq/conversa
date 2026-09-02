@@ -145,6 +145,13 @@ class Settings(BaseSettings):
         default=None,
         json_schema_extra={"env": "CONVERSA_RATE_LIMIT_PER_USER_PER_MINUTE"},
     )
+    # Comma-separated list of allowed browser origins for CORS (e.g.
+    # "https://app.example.com,https://staging.example.com"). Unset means no
+    # cross-origin browser access is allowed (server-to-server calls, which
+    # don't send an Origin header, are unaffected either way).
+    cors_allowed_origins: Optional[str] = Field(
+        default=None, json_schema_extra={"env": "CORS_ALLOWED_ORIGINS"}
+    )
 
     # Session expiry (daily / idle)
     session_expiry_mode: str = Field(
