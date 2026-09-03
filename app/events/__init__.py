@@ -12,14 +12,6 @@ from app.events.credential_events import (
     CREDENTIAL_CREATED,
     build_credential_created_event,
 )
-from app.events.mcp_server_events import (
-    MCP_SERVER_CREATED,
-    MCP_SERVER_DELETED,
-    MCP_SERVER_UPDATED,
-    build_mcp_server_created_event,
-    build_mcp_server_deleted_event,
-    build_mcp_server_updated_event,
-)
 from app.events.system_prompt_events import (
     SYSTEM_PROMPT_CREATED,
     SYSTEM_PROMPT_DELETED,
@@ -38,12 +30,6 @@ __all__ = [
     "build_context_source_updated_event",
     "CREDENTIAL_CREATED",
     "build_credential_created_event",
-    "MCP_SERVER_CREATED",
-    "MCP_SERVER_DELETED",
-    "MCP_SERVER_UPDATED",
-    "build_mcp_server_created_event",
-    "build_mcp_server_deleted_event",
-    "build_mcp_server_updated_event",
     "SYSTEM_PROMPT_CREATED",
     "SYSTEM_PROMPT_DELETED",
     "SYSTEM_PROMPT_UPDATED",

@@ -170,10 +170,6 @@ class Settings(BaseSettings):
     )
 
     # LLM / LiteLLM
-    mcp_tools_enabled: bool = Field(
-        default=False,
-        json_schema_extra={"env": "MCP_TOOLS_ENABLED"},
-    )
     llm_api_key: Optional[str] = Field(
         default=None, json_schema_extra={"env": "LLM_API_KEY"}
     )

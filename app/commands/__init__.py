@@ -16,14 +16,10 @@ from app.commands.sync_context_for_user_command import SyncContextForUserCommand
 __all__ = [
     "CreateContextSourceCommand",
     "CreateCredentialCommand",
-    "CreateMcpServerCommand",
     "CreateSystemPromptCommand",
     "DeleteContextSourceCommand",
-    "DeleteMcpServerCommand",
     "DeleteSystemPromptCommand",
-    "RefreshMcpServerToolsCommand",
     "SyncContextForUserCommand",
     "UpdateContextSourceCommand",
-    "UpdateMcpServerCommand",
     "UpdateSystemPromptCommand",
 ]
