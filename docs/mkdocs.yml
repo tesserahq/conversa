@@ -2,9 +2,11 @@ site_name: Conversa Documentation
 site_description: Conversation generation service documentation
 
 nav:
-  - Home: conversa-context.md
+  - Home: index.md
+  - User Context Design: conversa-context.md
   - Design: PYTHON_FASTAPI_CHAT_GATEWAY_DESIGN.md
   - Telegram Workflow: telegram-request-workflow.md
+  - Context Sources Sync: context-sources-sync.md
   - MCP Integration: mcp-server-integration-plan.md
   - Telegram Examples: telegram/message_examples.md
   - RFCs:
