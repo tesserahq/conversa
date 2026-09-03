@@ -1,7 +1,6 @@
 from app.models.context_snapshot import ContextSnapshot
 from app.models.context_source import ContextSource, ContextSourceState
 from app.models.credential import Credential
-from app.models.mcp_server import MCPServer
 from app.models.session import Session
 from app.models.session_message import SessionMessage
 from app.models.system_prompt import SystemPrompt, SystemPromptVersion
@@ -12,7 +11,6 @@ __all__ = [
     "ContextSource",
     "ContextSourceState",
     "Credential",
-    "MCPServer",
     "Session",
     "SessionMessage",
     "SystemPrompt",
