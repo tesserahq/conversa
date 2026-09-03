@@ -135,3 +135,64 @@ def test_get_due_user_source_pairs_excludes_disabled_sources(
     pairs = svc.get_due_user_source_pairs(limit=500)
     source_ids = [s.id for s, _ in pairs]
     assert setup_context_source.id not in source_ids
+
+
+def test_get_states_query_returns_states_for_source(db, setup_context_source_state):
+    """get_states_query returns state rows scoped to the given source."""
+    svc = ContextSourceStateRepository(db)
+    results = svc.get_states_query(setup_context_source_state.source_id).all()
+    assert len(results) == 1
+    assert results[0].id == setup_context_source_state.id
+
+
+def test_get_states_query_excludes_other_sources(
+    db, setup_context_source_state, setup_context_source, faker
+):
+    """get_states_query does not return states from a different source."""
+    from app.models.context_source import ContextSource
+
+    other_source = ContextSource(
+        source_id=f"other-{faker.lexify('??????').lower()}",
+        display_name=faker.company(),
+        base_url="https://api.example.com",
+        enabled=True,
+    )
+    db.add(other_source)
+    db.commit()
+    db.refresh(other_source)
+
+    svc = ContextSourceStateRepository(db)
+    results = svc.get_states_query(other_source.id).all()
+    assert results == []
+
+
+def test_get_states_query_filters_by_email_search(
+    db, setup_context_source_state, setup_user
+):
+    """get_states_query filters by a case-insensitive substring match on user email."""
+    svc = ContextSourceStateRepository(db)
+
+    match = svc.get_states_query(
+        setup_context_source_state.source_id,
+        search=setup_user.email[:5].upper(),
+    ).all()
+    assert len(match) == 1
+
+    no_match = svc.get_states_query(
+        setup_context_source_state.source_id,
+        search="no-such-user-xyz",
+    ).all()
+    assert no_match == []
+
+
+def test_get_states_query_orders_by_last_attempt_at_desc_nulls_last(
+    db, setup_context_source, setup_user, setup_another_user
+):
+    """get_states_query orders rows with a last_attempt_at before rows without one."""
+    svc = ContextSourceStateRepository(db)
+    with_attempt = svc.get_or_create_state(setup_context_source.id, setup_user.id)
+    svc.update_state(with_attempt, last_attempt_at=datetime.now(timezone.utc))
+    svc.get_or_create_state(setup_context_source.id, setup_another_user.id)
+
+    results = svc.get_states_query(setup_context_source.id).all()
+    assert results[0].id == with_attempt.id

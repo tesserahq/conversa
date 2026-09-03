@@ -1,6 +1,6 @@
 """Context sources API: CRUD for the Source Registry."""
 
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -17,7 +17,7 @@ from app.commands.context_sources import (
 )
 from app.commands.sync_context_for_user_command import SyncContextForUserCommand
 from app.db import get_db
-from app.models.context_source import ContextSource
+from app.models.context_source import ContextSource, ContextSourceState
 from app.models.user import User
 from app.routers.utils.dependencies import get_context_source_by_id, get_user_by_id
 from app.schemas.context_source import (
@@ -25,7 +25,11 @@ from app.schemas.context_source import (
     ContextSourceRead,
     ContextSourceUpdate,
 )
+from app.schemas.context_source_state import ContextSourceStateRead
 from app.repositories.context_source_repository import ContextSourceRepository
+from app.repositories.context_source_state_repository import (
+    ContextSourceStateRepository,
+)
 from tessera_sdk.server.dependencies.auth import get_current_user
 from app.infra.logging_config import get_logger
 
@@ -113,6 +117,38 @@ def get_context_source(
 ) -> ContextSourceRead:
     """Get a context source by ID."""
     return source
+
+
+def _to_state_reads(
+    states: List[ContextSourceState],
+) -> List[ContextSourceStateRead]:
+    return [
+        ContextSourceStateRead(
+            user_id=state.user_id,
+            user_email=state.user.email if state.user else None,
+            last_success_at=state.last_success_at,
+            last_attempt_at=state.last_attempt_at,
+            last_error=state.last_error,
+            next_run_at=state.next_run_at,
+            etag=state.etag,
+        )
+        for state in states
+    ]
+
+
+@router.get("/{id}/sync-state", response_model=Page[ContextSourceStateRead])
+def list_context_source_sync_state(
+    search: Optional[str] = None,
+    source: ContextSource = Depends(get_context_source_by_id),
+    params: Params = Depends(),
+    _authorized: bool = Depends(rbac["read"]),
+    _current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Page[ContextSourceStateRead]:
+    """List per-user sync state for a context source, optionally filtered by user email."""
+    svc = ContextSourceStateRepository(db)
+    query = svc.get_states_query(UUID(str(source.id)), search=search)
+    return paginate(query, params=params, transformer=_to_state_reads)
 
 
 @router.patch("/{id}", response_model=ContextSourceRead)
