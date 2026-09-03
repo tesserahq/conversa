@@ -6,7 +6,8 @@ from datetime import datetime, timezone
 from typing import List, Optional, Tuple
 from uuid import UUID
 
-from sqlalchemy.orm import Session
+from sqlalchemy import nulls_last
+from sqlalchemy.orm import Query, Session, joinedload
 
 from app.models.context_source import ContextSource
 from app.models.context_source import ContextSourceState
@@ -79,6 +80,26 @@ class ContextSourceStateRepository:
             state.next_run_at = next_run_at
         self._db.commit()
         self._db.refresh(state)
+
+    def get_states_query(
+        self,
+        source_id: UUID,
+        search: Optional[str] = None,
+    ) -> Query[ContextSourceState]:
+        """
+        Get a query of sync state rows for a source, joined with User for
+        email (for pagination). Optionally filtered by a case-insensitive
+        substring match on the user's email.
+        """
+        query = (
+            self._db.query(ContextSourceState)
+            .join(User, ContextSourceState.user_id == User.id)
+            .options(joinedload(ContextSourceState.user))
+            .filter(ContextSourceState.source_id == source_id)
+        )
+        if search:
+            query = query.filter(User.email.ilike(f"%{search}%"))
+        return query.order_by(nulls_last(ContextSourceState.last_attempt_at.desc()))
 
     def get_due_user_source_pairs(
         self,

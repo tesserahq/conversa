@@ -100,3 +100,36 @@ def test_create_context_source_invalid_base_url(client):
     }
     r = client.post("/context-sources", json=payload)
     assert r.status_code == 422
+
+
+def test_list_sync_state_returns_states_for_source(
+    client, setup_context_source_state, setup_user
+):
+    """GET /context-sources/{id}/sync-state returns states for the source."""
+    r = client.get(
+        f"/context-sources/{setup_context_source_state.source_id}/sync-state"
+    )
+    assert r.status_code == 200
+    data = r.json()
+    items = data["items"]
+    assert len(items) == 1
+    assert items[0]["user_id"] == str(setup_user.id)
+    assert items[0]["user_email"] == setup_user.email
+
+
+def test_list_sync_state_filters_by_search(
+    client, setup_context_source_state, setup_user
+):
+    """GET /context-sources/{id}/sync-state?search= filters by user email."""
+    r = client.get(
+        f"/context-sources/{setup_context_source_state.source_id}/sync-state",
+        params={"search": "no-such-user-xyz"},
+    )
+    assert r.status_code == 200
+    assert r.json()["items"] == []
+
+
+def test_list_sync_state_not_found_for_unknown_source(client):
+    """GET /context-sources/{id}/sync-state returns 404 for unknown source id."""
+    r = client.get(f"/context-sources/{uuid4()}/sync-state")
+    assert r.status_code == 404
