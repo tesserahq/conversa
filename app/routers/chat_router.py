@@ -6,7 +6,7 @@ import json
 import time
 import uuid
 from typing import Any, AsyncIterator, Optional
-
+from json import JSONDecodeError
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 from tessera_sdk.server.dependencies.auth import get_current_user
@@ -37,7 +37,18 @@ def get_router() -> Router:
 
 
 async def infer_domain(request: Request) -> Optional[str]:
-    return "*"
+    project_id = request.query_params.get("project_id")
+
+    if not project_id:
+        body_bytes = await request.body()
+        if body_bytes:
+            try:
+                body = json.loads(body_bytes)
+                project_id = body.get("project_id")
+            except JSONDecodeError:
+                pass
+
+    return project_id or "*"
 
 
 RESOURCE_CHAT = "chat"
