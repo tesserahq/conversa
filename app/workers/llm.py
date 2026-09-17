@@ -114,6 +114,7 @@ class LLMRunner:
         context: Optional[dict[str, Any]] = None,
         *,
         user_id: Optional[UUID] = None,
+        project_id: str = "*",
     ) -> AsyncIterator[str]:
         """Stream the assistant's reply as text deltas.
 
@@ -156,7 +157,9 @@ class LLMRunner:
 
         chunk_count = 0
         reply_length = 0
-        async for chunk in client.stream_complete(messages=messages, project_id="*"):
+        async for chunk in client.stream_complete(
+            messages=messages, project_id=project_id
+        ):
             chunk_count += 1
             if not chunk.choices:
                 continue
@@ -181,11 +184,16 @@ class LLMRunner:
         context: Optional[dict[str, Any]] = None,
         *,
         user_id: Optional[UUID] = None,
+        project_id: str = "*",
     ) -> str:
         """Non-streaming convenience wrapper: joins the full streamed reply."""
         parts: List[str] = []
         async for delta in self.stream(
-            msg, history=history, context=context, user_id=user_id
+            msg,
+            history=history,
+            context=context,
+            user_id=user_id,
+            project_id=project_id,
         ):
             parts.append(delta)
         return "".join(parts)

@@ -128,6 +128,7 @@ class Router:
         user_id: UUID,
         user_content: str,
         session_id: Optional[UUID] = None,
+        project_id: str = "*",
     ) -> tuple[OutboundMessage, UUID]:
         """Route a direct chat-API message for an already-authenticated user.
 
@@ -144,6 +145,7 @@ class Router:
             history=history,
             context=context,
             user_id=user_id,
+            project_id=project_id,
         )
         outbound = OutboundMessage(
             channel=API_CHANNEL,
@@ -163,6 +165,7 @@ class Router:
         user_id: UUID,
         user_content: str,
         session_id: Optional[UUID] = None,
+        project_id: str = "*",
     ) -> tuple[UUID, AsyncIterator[str]]:
         """Like route_api_message, but streams the reply as text deltas.
 
@@ -185,7 +188,11 @@ class Router:
             error: Optional[BaseException] = None
             try:
                 async for delta in self._llm.stream(
-                    msg, history=history, context=context, user_id=user_id
+                    msg,
+                    history=history,
+                    context=context,
+                    user_id=user_id,
+                    project_id=project_id,
                 ):
                     parts.append(delta)
                     await queue.put(("delta", delta))

@@ -48,7 +48,9 @@ async def infer_domain(request: Request) -> Optional[str]:
             except JSONDecodeError:
                 pass
 
-    return project_id or "*"
+    project_id = project_id or "*"
+    request.state.project_id = project_id
+    return project_id
 
 
 RESOURCE_CHAT = "chat"
@@ -101,6 +103,7 @@ async def _sse_chunks(
 )
 async def create_chat_completion(
     payload: ChatCompletionCreate,
+    request: Request,
     response: Response,
     _authorized: bool = Depends(rbac["create"]),
     _rate_limited: None = Depends(_rate_limit_chat),
@@ -108,12 +111,14 @@ async def create_chat_completion(
     router: Router = Depends(get_router),
 ):
     user_content = payload.messages[-1].content
+    project_id = getattr(request.state, "project_id", "*")
 
     if payload.stream:
         session_id, delta_gen = await router.stream_api_message(
             user_id=current_user.id,
             user_content=user_content,
             session_id=payload.session_id,
+            project_id=project_id,
         )
         completion_id = f"chatcmpl-{uuid.uuid4().hex}"
         created_ts = int(time.time())
@@ -127,6 +132,7 @@ async def create_chat_completion(
         user_id=current_user.id,
         user_content=user_content,
         session_id=payload.session_id,
+        project_id=project_id,
     )
     response.headers[SESSION_ID_HEADER] = str(session_id)
 
