@@ -59,6 +59,19 @@ def test_build_completion_messages_ordering_and_roles():
     assert messages[4].role == "user" and messages[4].content == "Next question"
 
 
+def test_build_completion_messages_includes_client_context():
+    messages = _build_completion_messages(
+        system_prompt="You are helpful.",
+        history=[],
+        user_content="Create a todo list",
+        client_context={"account_id": "acc-1", "todo_list_id": "list-1"},
+    )
+    assert messages[0].role == "system"
+    assert "Current app context" in messages[0].content
+    assert "acc-1" in messages[0].content
+    assert "list-1" in messages[0].content
+
+
 def test_build_completion_messages_skips_empty_content():
     messages = _build_completion_messages(
         system_prompt="Sys",

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -23,6 +24,15 @@ class ChatCompletionCreate(BaseModel):
     messages: list[ChatMessageInput] = Field(min_length=1)
     stream: bool = False
     session_id: UUID | None = None
+    client_context: dict[str, Any] | None = Field(
+        default=None,
+        description=(
+            "Free-form ambient context from the calling UI (e.g. account_id, "
+            "todo_list_id), surfaced to the model in its system prompt. "
+            "Advisory only — not an authorization grant, must not be trusted "
+            "for access control decisions."
+        ),
+    )
 
 
 class ChatCompletionMessageOut(BaseModel):
