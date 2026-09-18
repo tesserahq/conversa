@@ -119,6 +119,7 @@ async def create_chat_completion(
             user_content=user_content,
             session_id=payload.session_id,
             project_id=project_id,
+            client_context=payload.client_context,
         )
         completion_id = f"chatcmpl-{uuid.uuid4().hex}"
         created_ts = int(time.time())
@@ -133,6 +134,7 @@ async def create_chat_completion(
         user_content=user_content,
         session_id=payload.session_id,
         project_id=project_id,
+        client_context=payload.client_context,
     )
     response.headers[SESSION_ID_HEADER] = str(session_id)
 

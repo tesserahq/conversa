@@ -21,7 +21,13 @@ class _FakeRouter:
         self.stream_calls: list[dict] = []
 
     async def route_api_message(
-        self, *, user_id, user_content, session_id=None, project_id="*"
+        self,
+        *,
+        user_id,
+        user_content,
+        session_id=None,
+        project_id="*",
+        client_context=None,
     ):
         self.calls.append(
             {
@@ -29,12 +35,19 @@ class _FakeRouter:
                 "user_content": user_content,
                 "session_id": session_id,
                 "project_id": project_id,
+                "client_context": client_context,
             }
         )
         return _FakeOutbound(self.reply_text), self.session_id
 
     async def stream_api_message(
-        self, *, user_id, user_content, session_id=None, project_id="*"
+        self,
+        *,
+        user_id,
+        user_content,
+        session_id=None,
+        project_id="*",
+        client_context=None,
     ):
         self.stream_calls.append(
             {
@@ -42,6 +55,7 @@ class _FakeRouter:
                 "user_content": user_content,
                 "session_id": session_id,
                 "project_id": project_id,
+                "client_context": client_context,
             }
         )
 

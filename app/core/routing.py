@@ -129,6 +129,7 @@ class Router:
         user_content: str,
         session_id: Optional[UUID] = None,
         project_id: str = "*",
+        client_context: Optional[dict[str, Any]] = None,
     ) -> tuple[OutboundMessage, UUID]:
         """Route a direct chat-API message for an already-authenticated user.
 
@@ -146,6 +147,7 @@ class Router:
             context=context,
             user_id=user_id,
             project_id=project_id,
+            client_context=client_context,
         )
         outbound = OutboundMessage(
             channel=API_CHANNEL,
@@ -166,6 +168,7 @@ class Router:
         user_content: str,
         session_id: Optional[UUID] = None,
         project_id: str = "*",
+        client_context: Optional[dict[str, Any]] = None,
     ) -> tuple[UUID, AsyncIterator[str]]:
         """Like route_api_message, but streams the reply as text deltas.
 
@@ -193,6 +196,7 @@ class Router:
                     context=context,
                     user_id=user_id,
                     project_id=project_id,
+                    client_context=client_context,
                 ):
                     parts.append(delta)
                     await queue.put(("delta", delta))

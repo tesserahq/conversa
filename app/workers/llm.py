@@ -53,18 +53,37 @@ def _format_context_for_prompt(context: dict[str, Any]) -> str:
     return "\n\nUser context (use when relevant):\n" + "\n".join(parts)
 
 
+def _format_client_context_for_prompt(client_context: dict[str, Any]) -> str:
+    """Format UI-supplied ambient context (e.g. account_id, todo_list_id)
+    for injection into the system prompt. Advisory only: this is client-
+    supplied data, not an authorization grant, so it must never be used in
+    place of a real access-control check.
+    """
+    if not client_context:
+        return ""
+    return (
+        "\n\nCurrent app context (use these values directly instead of "
+        "asking the user for them):\n" + json.dumps(client_context, default=str)
+    )
+
+
 def _build_completion_messages(
     system_prompt: str,
     history: List[dict[str, str]],
     user_content: str,
     context: Optional[dict[str, Any]] = None,
+    client_context: Optional[dict[str, Any]] = None,
 ) -> List[CompletionMessage]:
     """Build Modela messages: system prompt, history, then current user turn."""
     full_prompt = system_prompt
     if context:
         ctx_block = _format_context_for_prompt(context)
         if ctx_block:
-            full_prompt = system_prompt.rstrip() + ctx_block
+            full_prompt = full_prompt.rstrip() + ctx_block
+    if client_context:
+        client_ctx_block = _format_client_context_for_prompt(client_context)
+        if client_ctx_block:
+            full_prompt = full_prompt.rstrip() + client_ctx_block
 
     messages: List[CompletionMessage] = [
         CompletionMessage(role="system", content=full_prompt)
@@ -115,6 +134,7 @@ class LLMRunner:
         *,
         user_id: Optional[UUID] = None,
         project_id: str = "*",
+        client_context: Optional[dict[str, Any]] = None,
     ) -> AsyncIterator[str]:
         """Stream the assistant's reply as text deltas.
 
@@ -129,6 +149,7 @@ class LLMRunner:
             history or [],
             msg.text or "",
             context=context,
+            client_context=client_context,
         )
         context_summary = _summarize_context(context)
         user_text_length = len((msg.text or "").strip())
@@ -185,6 +206,7 @@ class LLMRunner:
         *,
         user_id: Optional[UUID] = None,
         project_id: str = "*",
+        client_context: Optional[dict[str, Any]] = None,
     ) -> str:
         """Non-streaming convenience wrapper: joins the full streamed reply."""
         parts: List[str] = []
@@ -194,6 +216,7 @@ class LLMRunner:
             context=context,
             user_id=user_id,
             project_id=project_id,
+            client_context=client_context,
         ):
             parts.append(delta)
         return "".join(parts)
