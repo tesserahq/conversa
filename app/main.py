@@ -158,6 +158,7 @@ def create_app(testing: bool = False, auth_middleware=None) -> FastAPI:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["X-Conversa-Session-Id"],
     )
 
     register_exception_handlers(app)
