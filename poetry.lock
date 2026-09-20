@@ -3309,7 +3309,7 @@ full = ["httpx (>=0.27.0,<0.29.0)", "httpx2 (>=2.0.0)", "itsdangerous", "jinja2"
 
 [[package]]
 name = "tessera-sdk"
-version = "0.1.6"
+version = "0.1.7"
 description = "A Python SDK for Tessera with Identies integration, authentication middleware, and user onboarding"
 optional = false
 python-versions = ">=3.11"
@@ -3337,7 +3337,7 @@ urllib3 = ">=1.26.0"
 type = "git"
 url = "https://github.com/tesserahq/tessera-sdk-py.git"
 reference = "main"
-resolved_reference = "5f843b574cbaf2484d058d8a70d2cf910dd98a39"
+resolved_reference = "c2c365a5da1444dc05a5d34776817bcd8fe7a7ba"
 
 [[package]]
 name = "typing-extensions"

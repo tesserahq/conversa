@@ -1,11 +1,11 @@
 import os
 from pathlib import Path
+from typing import Optional
 
 from dotenv import load_dotenv
 from pydantic import AliasChoices, Field, model_validator
-from typing import Optional
 from pydantic_settings import BaseSettings
-from sqlalchemy.engine.url import make_url, URL
+from sqlalchemy.engine.url import URL, make_url
 
 DEFAULT_DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/conversa"
 DEFAULT_TEST_DATABASE_URL = (
@@ -68,13 +68,6 @@ class Settings(BaseSettings):
         default="default-salt", json_schema_extra={"env": "FERNET_SALT"}
     )
 
-    redis_host: str = Field(
-        default="localhost", json_schema_extra={"env": "REDIS_HOST"}
-    )
-    redis_port: int = Field(default=6379, json_schema_extra={"env": "REDIS_PORT"})
-    redis_namespace: str = Field(
-        default="llama_index", json_schema_extra={"env": "REDIS_NAMESPACE"}
-    )
     service_account_client_id: str = Field(
         default="", json_schema_extra={"env": "SERVICE_ACCOUNT_CLIENT_ID"}
     )
