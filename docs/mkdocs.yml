@@ -7,6 +7,7 @@ nav:
   - Design: PYTHON_FASTAPI_CHAT_GATEWAY_DESIGN.md
   - Telegram Workflow: telegram-request-workflow.md
   - Context Sources Sync: context-sources-sync.md
+  - Client Context: client-context.md
   - MCP Integration: mcp-server-integration-plan.md
   - Telegram Examples: telegram/message_examples.md
   - RFCs:
