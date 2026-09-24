@@ -25,11 +25,11 @@ nats_worker = "run_nats_worker:main"
 python = ">=3.11,<3.14"
 fastapi = "v0.141.1"
 python-dotenv = "^1.2.3"
-sqlalchemy = "^2.0.39"
+sqlalchemy = "^2.0.54"
 asyncpg = "^0.31.0"
 gunicorn = "26.2.0"
 alembic = "^1.20.0"
-faker = "40.38.0"
+faker = "40.39.0"
 psycopg2-binary = "^2.9.13"
 pydantic = {extras = ["email"], version = "^2.13.5"}
 black = "^26.1.0"
@@ -53,22 +53,22 @@ sqlalchemy-json = "^0.7.0"
 cryptography = "^50.0.0"
 fernet = "^1.0.1"
 celery = "^5.5.2"
-rollbar = "^1.4.0"
+rollbar = "^1.5.0"
 redis = "^7.0.0"
-fastapi-pagination = "^0.15.16"
+fastapi-pagination = "^0.16.0"
 # tessera-sdk = { path = "../tessera-sdk-py/", develop = true }
 tessera-sdk = { git = "https://github.com/tesserahq/tessera-sdk-py.git", branch = "main" }
 apscheduler = "<4"
 pytz = "^2025.2"
-mako = "^1.4.1"
-faststream = {extras = ["nats"], version = "^0.7.5"}
+mako = "^1.4.3"
+faststream = {extras = ["nats"], version = "^0.7.7"}
 python-telegram-bot = "22.8"
 slack-bolt = ">=1.30.0"
 aiohttp = "^3.14.3"
 
 [tool.poetry.dependencies.uvicorn]
 extras = [ "standard" ]
-version = "^0.52.0"
+version = "^0.53.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.0.0"
