@@ -12,7 +12,7 @@ from app.repositories.context_snapshot_repository import ContextSnapshotReposito
 from app.repositories.session_manager import SessionManager
 from app.repositories.session_repository import SessionRepository
 from app.tasks.context_sync_task import sync_context_for_user_task
-from app.utils.db.db_session_helper import db_session
+from app.db import session_scope
 from app.workers.llm import LLMRunner, build_llm_runner_from_env
 import asyncio
 
@@ -52,7 +52,7 @@ class Router:
         if resolved_user_id is None:
             return self._create_link_resolution_error_outbound_message(msg)
 
-        with db_session() as db:
+        with session_scope() as db:
             session_manager = SessionManager(db)
             session = session_manager.get_or_create_session(msg, resolved_user_id)
             session_id = session.id
@@ -83,7 +83,7 @@ class Router:
             reply_to=msg.message_id,
             media=[],
         )
-        with db_session() as db:
+        with session_scope() as db:
             SessionManager(db).add_turn(session_id, msg, outbound)
         return outbound
 
@@ -97,7 +97,7 @@ class Router:
         history + context snapshot. Shared by the non-streaming and
         streaming API entry points below.
         """
-        with db_session() as db:
+        with session_scope() as db:
             session_manager = SessionManager(db)
             session = None
             if session_id is not None:
@@ -158,7 +158,7 @@ class Router:
             reply_to=msg.message_id,
             media=[],
         )
-        with db_session() as db:
+        with session_scope() as db:
             SessionManager(db).add_turn(resolved_session_id, msg, outbound)
         return outbound, resolved_session_id
 
@@ -217,7 +217,7 @@ class Router:
                         reply_to=msg.message_id,
                         media=[],
                     )
-                    with db_session() as db:
+                    with session_scope() as db:
                         SessionManager(db).add_turn(resolved_session_id, msg, outbound)
                 await queue.put(("error", error) if error else ("done", None))
 

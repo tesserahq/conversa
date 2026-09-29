@@ -63,7 +63,7 @@ class CredentialRepository(SoftDeleteRepository[Credential]):
             created_by_id=created_by_id,
         )
         self.db.add(credential)
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(credential)
         return credential
 
@@ -85,7 +85,7 @@ class CredentialRepository(SoftDeleteRepository[Credential]):
                 Any, encrypt_credential_fields(data.fields)
             )
 
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(credential)
         return credential
 

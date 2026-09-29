@@ -45,7 +45,7 @@ class SoftDeleteRepository(Generic[T]):
 
         if record:
             record.deleted_at = datetime.now(timezone.utc)
-            self.db.commit()
+            self.db.flush()
             return True
         return False
 
@@ -60,7 +60,7 @@ class SoftDeleteRepository(Generic[T]):
         )
         for record in records:
             record.deleted_at = datetime.now(timezone.utc)
-            self.db.commit()
+            self.db.flush()
         return True
 
     def restore_record(self, record_id: UUID) -> bool:
@@ -82,7 +82,7 @@ class SoftDeleteRepository(Generic[T]):
 
         if record:
             record.deleted_at = None
-            self.db.commit()
+            self.db.flush()
             return True
         return False
 
@@ -104,7 +104,7 @@ class SoftDeleteRepository(Generic[T]):
 
         if record:
             self.db.delete(record)
-            self.db.commit()
+            self.db.flush()
             return True
         return False
 

@@ -13,7 +13,7 @@ from slack_sdk.oauth.installation_store.async_installation_store import (
 from app.repositories.channel_installation_repository import (
     ChannelInstallationRepository,
 )
-from app.utils.db.db_session_helper import db_session
+from app.db import session_scope
 
 logger = getLogger(__name__)
 
@@ -24,7 +24,7 @@ class SlackInstallationStore(AsyncInstallationStore):
     async def async_save(self, installation: Installation) -> None:
         team_id = installation.team_id or ""
         sensitive = {"bot_token": installation.bot_token}
-        with db_session() as db:
+        with session_scope() as db:
             repo = ChannelInstallationRepository(db)
             repo.upsert(
                 channel=CHANNEL,
@@ -46,7 +46,7 @@ class SlackInstallationStore(AsyncInstallationStore):
         is_enterprise_install: Optional[bool] = False,
     ) -> Optional[Installation]:
         lookup_id = team_id or enterprise_id or ""
-        with db_session() as db:
+        with session_scope() as db:
             repo = ChannelInstallationRepository(db)
             record = repo.get_by_channel_and_account(CHANNEL, lookup_id)
             if not record:

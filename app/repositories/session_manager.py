@@ -76,7 +76,7 @@ class SessionManager:
                 session.last_message_at = datetime.now(timezone.utc)
                 if session.origin != defaults.get("origin"):
                     session.origin = defaults.get("origin")
-                self._db.commit()
+                self._db.flush()
                 self._db.refresh(session)
         return session
 
@@ -125,7 +125,7 @@ class SessionManager:
         session = self._session_svc.get_session(session_id)
         if session:
             session.last_message_at = datetime.now(timezone.utc)
-            self._db.commit()
+            self._db.flush()
             self._db.refresh(session)
 
     def get_history_for_llm(
@@ -205,4 +205,4 @@ class SessionManager:
         for m in to_summarize:
             self._db.delete(m)
         self._message_svc.create_message(session_id, summary_msg)
-        self._db.commit()
+        self._db.flush()

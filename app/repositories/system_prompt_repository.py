@@ -66,7 +66,7 @@ class SystemPromptRepository:
         self.db.add(version)
         self.db.flush()
         prompt.current_version_id = version.id
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(prompt)
         return prompt
 
@@ -81,7 +81,7 @@ class SystemPromptRepository:
         if new_name != name and self.get_system_prompt_by_name(new_name) is not None:
             raise ValueError(f"System prompt with name {new_name!r} already exists")
         setattr(prompt, "name", new_name)
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(prompt)
         return prompt
 
@@ -91,7 +91,7 @@ class SystemPromptRepository:
         if prompt is None:
             return False
         self.db.delete(prompt)
-        self.db.commit()
+        self.db.flush()
         return True
 
     def get_current_content(self, name: str) -> Optional[str]:
@@ -195,6 +195,6 @@ class SystemPromptRepository:
         self.db.flush()  # get version.id
 
         prompt.current_version_id = version.id
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(version)
         return version

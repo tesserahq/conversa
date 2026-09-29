@@ -11,7 +11,7 @@ from app.config import get_settings
 from app.infra.celery_app import celery_app
 from app.infra.logging_config import get_logger
 from tessera_sdk.infra.events.event import Event
-from app.db import db_manager
+from app.db import session_scope
 from app.models.session import Session
 import asyncio
 from telegram import Bot
@@ -50,7 +50,7 @@ def _persist_linked_notification(
     provider_message_id: str,
 ) -> None:
     """Persist outbound linked-account notification in session history."""
-    with db_manager.db_session() as db:
+    with session_scope() as db:
         session_service = SessionRepository(db)
         message_service = SessionMessageRepository(db)
         session = (
@@ -82,7 +82,6 @@ def _persist_linked_notification(
             ),
         )
         session.last_message_at = datetime.now(timezone.utc)
-        db.commit()
 
 
 def _handle_external_account_linked_event(event: Event) -> None:

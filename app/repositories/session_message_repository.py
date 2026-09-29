@@ -4,16 +4,18 @@ from __future__ import annotations
 
 from typing import List
 
+from sqlalchemy import delete
 from sqlalchemy.orm import Query, Session as DBSession
+from tessera_sdk.infra.repository import Repository
 
 from app.models.session_message import SessionMessage
 from app.schemas.session import MessageCreate
 from uuid import UUID
 
 
-class SessionMessageRepository:
+class SessionMessageRepository(Repository):
     def __init__(self, db: DBSession) -> None:
-        self.db = db
+        super().__init__(db)
 
     def create_message(self, session_id: UUID, data: MessageCreate) -> SessionMessage:
         dump = data.model_dump()
@@ -24,7 +26,7 @@ class SessionMessageRepository:
             **dump,
         )
         self.db.add(msg)
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(msg)
         return msg
 
@@ -55,13 +57,10 @@ class SessionMessageRepository:
         )
 
     def delete_messages_for_session(self, session_id: UUID) -> int:
-        deleted = (
-            self.db.query(SessionMessage)
-            .filter(SessionMessage.session_id == session_id)
-            .delete()
+        result = self._execute_mutation(
+            delete(SessionMessage).where(SessionMessage.session_id == session_id)
         )
-        self.db.commit()
-        return deleted
+        return result.rowcount
 
     def get_message_count(self, session_id: UUID) -> int:
         return (

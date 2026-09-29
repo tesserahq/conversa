@@ -67,7 +67,7 @@ class ChannelInstallationRepository(SoftDeleteRepository[ChannelInstallation]):
             )
             self.db.add(installation)
 
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(installation)
         return installation
 

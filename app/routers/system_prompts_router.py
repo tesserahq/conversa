@@ -13,7 +13,7 @@ from app.commands.system_prompts import (
     DeleteSystemPromptCommand,
     UpdateSystemPromptCommand,
 )
-from app.db import get_db
+from app.db import DbSession
 from app.schemas.system_prompt import (
     SystemPromptCreate,
     SystemPromptCurrentRead,
@@ -47,12 +47,7 @@ rbac_prompts = build_rbac_dependencies(
     "",
     response_model=Page[SystemPromptRead],
 )
-def list_system_prompts(
-    params: Params = Depends(),
-    _authorized: bool = Depends(rbac_prompts["read"]),
-    _current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
-) -> Page[SystemPromptRead]:
+def list_system_prompts(db: DbSession, params: Params = Depends(), _authorized: bool = Depends(rbac_prompts["read"]), _current_user = Depends(get_current_user)) -> Page[SystemPromptRead]:
     """List all system prompts with pagination."""
     svc = SystemPromptRepository(db)
     query = svc.get_system_prompts_query()
@@ -64,12 +59,7 @@ def list_system_prompts(
     response_model=SystemPromptRead,
     status_code=201,
 )
-def create_system_prompt(
-    data: SystemPromptCreate,
-    _authorized: bool = Depends(rbac_prompts["create"]),
-    _current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
-) -> SystemPromptRead:
+def create_system_prompt(data: SystemPromptCreate, db: DbSession, _authorized: bool = Depends(rbac_prompts["create"]), _current_user = Depends(get_current_user)) -> SystemPromptRead:
     """Create a new system prompt with optional initial content."""
     command = CreateSystemPromptCommand(db)
     prompt = command.execute(
@@ -83,12 +73,7 @@ def create_system_prompt(
     "/{name}",
     response_model=SystemPromptRead,
 )
-def get_system_prompt(
-    name: str,
-    _authorized: bool = Depends(rbac_prompts["read"]),
-    _current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
-) -> SystemPromptRead:
+def get_system_prompt(name: str, db: DbSession, _authorized: bool = Depends(rbac_prompts["read"]), _current_user = Depends(get_current_user)) -> SystemPromptRead:
     """Get a system prompt by name."""
     svc = SystemPromptRepository(db)
     prompt = svc.get_system_prompt_by_name(name)
@@ -101,13 +86,7 @@ def get_system_prompt(
     "/{name}",
     response_model=SystemPromptRead,
 )
-def update_system_prompt(
-    name: str,
-    data: SystemPromptUpdate,
-    _authorized: bool = Depends(rbac_prompts["update"]),
-    _current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
-) -> SystemPromptRead:
+def update_system_prompt(name: str, data: SystemPromptUpdate, db: DbSession, _authorized: bool = Depends(rbac_prompts["update"]), _current_user = Depends(get_current_user)) -> SystemPromptRead:
     """Update a system prompt (e.g. rename)."""
     command = UpdateSystemPromptCommand(db)
     prompt = command.execute(
@@ -124,12 +103,7 @@ def update_system_prompt(
     "/{name}",
     status_code=204,
 )
-def delete_system_prompt(
-    name: str,
-    _authorized: bool = Depends(rbac_prompts["delete"]),
-    _current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
-) -> None:
+def delete_system_prompt(name: str, db: DbSession, _authorized: bool = Depends(rbac_prompts["delete"]), _current_user = Depends(get_current_user)) -> None:
     """Delete a system prompt and all its versions."""
     command = DeleteSystemPromptCommand(db)
     if not command.execute(
@@ -143,12 +117,7 @@ def delete_system_prompt(
     "/{name}/current",
     response_model=SystemPromptCurrentRead,
 )
-def get_system_prompt_current(
-    name: str,
-    _authorized: bool = Depends(rbac_prompts["read"]),
-    _current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
-) -> SystemPromptCurrentRead:
+def get_system_prompt_current(name: str, db: DbSession, _authorized: bool = Depends(rbac_prompts["read"]), _current_user = Depends(get_current_user)) -> SystemPromptCurrentRead:
     """Return the current system prompt content and version info."""
     svc = SystemPromptRepository(db)
     result = svc.get_current_version_display(name)
@@ -167,13 +136,7 @@ def get_system_prompt_current(
     "/{name}/versions",
     response_model=Page[SystemPromptVersionRead],
 )
-def list_system_prompt_versions(
-    name: str,
-    params: Params = Depends(),
-    _authorized: bool = Depends(rbac_prompts["read"]),
-    _current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
-) -> Page[SystemPromptVersionRead]:
+def list_system_prompt_versions(name: str, db: DbSession, params: Params = Depends(), _authorized: bool = Depends(rbac_prompts["read"]), _current_user = Depends(get_current_user)) -> Page[SystemPromptVersionRead]:
     """List version history for the given system prompt, newest first."""
     svc = SystemPromptRepository(db)
     query = svc.get_versions_query(name)
@@ -185,13 +148,7 @@ def list_system_prompt_versions(
     response_model=SystemPromptVersionRead,
     status_code=201,
 )
-def create_system_prompt_version(
-    name: str,
-    data: SystemPromptVersionCreate,
-    _authorized: bool = Depends(rbac_prompts["create"]),
-    _current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
-) -> SystemPromptVersionRead:
+def create_system_prompt_version(name: str, data: SystemPromptVersionCreate, db: DbSession, _authorized: bool = Depends(rbac_prompts["create"]), _current_user = Depends(get_current_user)) -> SystemPromptVersionRead:
     """Create a new version and set it as the current system prompt."""
     svc = SystemPromptRepository(db)
     version = svc.create_version(name, content=data.content, note=data.note)
