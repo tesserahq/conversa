@@ -42,7 +42,14 @@ def _session_to_list_row(s) -> SessionListRow:
 
 
 @sessions_router.get("", response_model=Page[SessionListRow])
-def list_sessions(db: DbSession, params: Params = Depends(), channel: str | None = Query(None), active_minutes: int | None = Query(None), _authorized: bool = Depends(rbac["read"]), _current_user = Depends(get_current_user)) -> Page[SessionListRow]:
+def list_sessions(
+    db: DbSession,
+    params: Params = Depends(),
+    channel: str | None = Query(None),
+    active_minutes: int | None = Query(None),
+    _authorized: bool = Depends(rbac["read"]),
+    _current_user=Depends(get_current_user),
+) -> Page[SessionListRow]:
     """List sessions with optional filters."""
     manager = SessionManager(db)
     query = manager.get_sessions_query(
@@ -55,7 +62,12 @@ def list_sessions(db: DbSession, params: Params = Depends(), channel: str | None
 
 
 @sessions_router.get("/{session_id}", response_model=SessionRead)
-def get_session(session_id: UUID, db: DbSession, _authorized: bool = Depends(rbac["read"]), _current_user = Depends(get_current_user)) -> SessionRead:
+def get_session(
+    session_id: UUID,
+    db: DbSession,
+    _authorized: bool = Depends(rbac["read"]),
+    _current_user=Depends(get_current_user),
+) -> SessionRead:
     """Get a session by ID."""
     svc = SessionRepository(db)
     session = svc.get_session(session_id)
@@ -65,7 +77,13 @@ def get_session(session_id: UUID, db: DbSession, _authorized: bool = Depends(rba
 
 
 @sessions_router.get("/{session_id}/messages", response_model=Page[MessageRead])
-def list_session_messages(session_id: UUID, db: DbSession, params: Params = Depends(), _authorized: bool = Depends(rbac["read"]), _current_user = Depends(get_current_user)) -> Page[MessageRead]:
+def list_session_messages(
+    session_id: UUID,
+    db: DbSession,
+    params: Params = Depends(),
+    _authorized: bool = Depends(rbac["read"]),
+    _current_user=Depends(get_current_user),
+) -> Page[MessageRead]:
     """List messages for a session with pagination."""
     svc = SessionRepository(db)
     session = svc.get_session(session_id)
@@ -77,7 +95,12 @@ def list_session_messages(session_id: UUID, db: DbSession, params: Params = Depe
 
 
 @sessions_router.post("/{session_id}/reset", response_model=SessionRead)
-def reset_session(session_id: UUID, db: DbSession, _authorized: bool = Depends(rbac["update"]), _current_user = Depends(get_current_user)) -> SessionRead:
+def reset_session(
+    session_id: UUID,
+    db: DbSession,
+    _authorized: bool = Depends(rbac["update"]),
+    _current_user=Depends(get_current_user),
+) -> SessionRead:
     """Reset a session (new session id, same key)."""
     svc = SessionRepository(db)
     session = svc.get_session(session_id)
@@ -90,7 +113,13 @@ def reset_session(session_id: UUID, db: DbSession, _authorized: bool = Depends(r
 
 
 @sessions_router.post("/{session_id}/compact", response_model=dict)
-def compact_session(session_id: UUID, db: DbSession, keep_last_n: int = Query(20, ge=1, le=100), _authorized: bool = Depends(rbac["update"]), _current_user = Depends(get_current_user)) -> dict:
+def compact_session(
+    session_id: UUID,
+    db: DbSession,
+    keep_last_n: int = Query(20, ge=1, le=100),
+    _authorized: bool = Depends(rbac["update"]),
+    _current_user=Depends(get_current_user),
+) -> dict:
     """Compact older messages into a summary (stub summarizer)."""
     svc = SessionRepository(db)
     session = svc.get_session(session_id)

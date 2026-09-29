@@ -20,7 +20,16 @@ from tessera_sdk.testing.transaction_guards import (
 CONFIG = TransactionGuardConfig(
     app_root=Path(__file__).parents[2] / "app",
     baseline_path=Path(__file__).with_name("transaction_baseline.json"),
-    transaction_dirs=(*DEFAULT_TRANSACTION_DIRS, "middleware", "core", "messaging", "workers", "channels", "adapters", "gateway"),
+    transaction_dirs=(
+        *DEFAULT_TRANSACTION_DIRS,
+        "middleware",
+        "core",
+        "messaging",
+        "workers",
+        "channels",
+        "adapters",
+        "gateway",
+    ),
     session_modules=("db.py", "services/sdk_user_service.py"),
     repository_base_modules=(),
     # Allowlisted top-level workflows that commit early around external I/O:

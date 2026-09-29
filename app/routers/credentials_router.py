@@ -50,7 +50,12 @@ def list_credential_types(
 
 
 @router.get("", response_model=Page[CredentialRead])
-def list_credentials(db: DbSession, params: Params = Depends(), _authorized: bool = Depends(rbac["read"]), _current_user = Depends(get_current_user)) -> Page[CredentialRead]:
+def list_credentials(
+    db: DbSession,
+    params: Params = Depends(),
+    _authorized: bool = Depends(rbac["read"]),
+    _current_user=Depends(get_current_user),
+) -> Page[CredentialRead]:
     """List all credentials with pagination."""
     svc = CredentialRepository(db)
     query = svc.get_credentials_query()
@@ -60,7 +65,12 @@ def list_credentials(db: DbSession, params: Params = Depends(), _authorized: boo
 
 
 @router.post("", response_model=CredentialRead, status_code=201)
-def create_credential(data: CredentialCreate, db: DbSession, _authorized: bool = Depends(rbac["create"]), _current_user = Depends(get_current_user)) -> CredentialRead:
+def create_credential(
+    data: CredentialCreate,
+    db: DbSession,
+    _authorized: bool = Depends(rbac["create"]),
+    _current_user=Depends(get_current_user),
+) -> CredentialRead:
     """Create a new credential."""
     command = CreateCredentialCommand(db)
     credential = command.execute(
@@ -72,7 +82,12 @@ def create_credential(data: CredentialCreate, db: DbSession, _authorized: bool =
 
 
 @router.get("/{credential_id}", response_model=CredentialRead)
-def get_credential(credential_id: UUID, db: DbSession, _authorized: bool = Depends(rbac["read"]), _current_user = Depends(get_current_user)) -> CredentialRead:
+def get_credential(
+    credential_id: UUID,
+    db: DbSession,
+    _authorized: bool = Depends(rbac["read"]),
+    _current_user=Depends(get_current_user),
+) -> CredentialRead:
     """Get a credential by ID."""
     svc = CredentialRepository(db)
     credential = svc.get_credential(credential_id)
@@ -86,7 +101,12 @@ def get_credential(credential_id: UUID, db: DbSession, _authorized: bool = Depen
     response_model=CredentialFieldsReveal,
     status_code=200,
 )
-def reveal_credential_fields(credential_id: UUID, db: DbSession, _authorized: bool = Depends(rbac["read"]), _current_user = Depends(get_current_user)) -> CredentialFieldsReveal:
+def reveal_credential_fields(
+    credential_id: UUID,
+    db: DbSession,
+    _authorized: bool = Depends(rbac["read"]),
+    _current_user=Depends(get_current_user),
+) -> CredentialFieldsReveal:
     """Return decrypted credential field values. Use only when you need to verify or edit stored data."""
     svc = CredentialRepository(db)
     credential = svc.get_credential(credential_id)
@@ -102,7 +122,13 @@ def reveal_credential_fields(credential_id: UUID, db: DbSession, _authorized: bo
 
 
 @router.patch("/{credential_id}", response_model=CredentialRead)
-def update_credential(credential_id: UUID, data: CredentialUpdate, db: DbSession, _authorized: bool = Depends(rbac["update"]), _current_user = Depends(get_current_user)) -> CredentialRead:
+def update_credential(
+    credential_id: UUID,
+    data: CredentialUpdate,
+    db: DbSession,
+    _authorized: bool = Depends(rbac["update"]),
+    _current_user=Depends(get_current_user),
+) -> CredentialRead:
     """Update a credential."""
     svc = CredentialRepository(db)
     credential = svc.update_credential(credential_id, data)
@@ -112,7 +138,12 @@ def update_credential(credential_id: UUID, data: CredentialUpdate, db: DbSession
 
 
 @router.delete("/{credential_id}", status_code=204)
-def delete_credential(credential_id: UUID, db: DbSession, _authorized: bool = Depends(rbac["delete"]), _current_user = Depends(get_current_user)) -> None:
+def delete_credential(
+    credential_id: UUID,
+    db: DbSession,
+    _authorized: bool = Depends(rbac["delete"]),
+    _current_user=Depends(get_current_user),
+) -> None:
     """Soft delete a credential."""
     svc = CredentialRepository(db)
     if not svc.delete_credential(credential_id):

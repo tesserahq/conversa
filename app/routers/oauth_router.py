@@ -55,7 +55,9 @@ async def slack_install(
 
 
 @router.get("/slack/callback")
-async def slack_callback(db: DbSession, code: str = Query(...), state: str = Query(...)) -> RedirectResponse:
+async def slack_callback(
+    db: DbSession, code: str = Query(...), state: str = Query(...)
+) -> RedirectResponse:
     """Handle Slack OAuth callback: exchange code, store installation, fire event."""
     settings = get_settings()
     if not settings.slack_client_id or not settings.slack_client_secret:
