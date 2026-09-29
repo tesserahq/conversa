@@ -12,6 +12,7 @@ from app.events.credential_events import build_credential_created_event
 from app.models.credential import Credential
 from app.schemas.credential import CredentialCreate
 from app.repositories.credential_repository import CredentialRepository
+from app.db import on_commit
 from tessera_sdk.infra.events.nats_router import NatsEventPublisher  # type: ignore[import-untyped]
 
 
@@ -69,9 +70,15 @@ class CreateCredentialCommand:
                 "Publishing credential-created event to NATS: %s",
                 event.model_dump_json(),
             )
-            try:
-                self.nats_publisher.publish_sync(event, event.event_type)
-            except Exception:  # pragma: no cover - defensive logging
-                self.logger.exception(
-                    "Failed to publish credential-created event to NATS"
-                )
+            publisher = self.nats_publisher
+
+            def publish() -> None:
+                try:
+                    publisher.publish_sync(event, event.event_type)
+                except Exception:  # pragma: no cover - defensive logging
+                    self.logger.exception(
+                        "Failed to publish credential-created event to NATS"
+                    )
+
+            # Dispatch only after the transaction commits; dropped on rollback.
+            on_commit(publish)

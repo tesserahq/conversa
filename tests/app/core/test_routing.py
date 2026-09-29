@@ -97,7 +97,7 @@ async def test_route_to_llm_resolves_user_and_calls_llm(monkeypatch):
             id=resolved_user_id
         )
     )
-    monkeypatch.setattr(routing, "db_session", _fake_db_session)
+    monkeypatch.setattr(routing, "session_scope", _fake_db_session)
     monkeypatch.setattr(routing, "SessionManager", _FakeSessionManager)
     monkeypatch.setattr(router, "_load_context_for_user", lambda db, user_id: None)
 
@@ -147,7 +147,7 @@ async def test_route_api_message_creates_new_session_when_no_session_id(monkeypa
     fake_manager.add_turn_calls = []
 
     router = routing.Router(llm=_FakeLLMEcho())
-    monkeypatch.setattr(routing, "db_session", _fake_db_session)
+    monkeypatch.setattr(routing, "session_scope", _fake_db_session)
     monkeypatch.setattr(routing, "SessionManager", fake_manager)
     monkeypatch.setattr(router, "_load_context_for_user", lambda db, user_id: None)
 
@@ -187,7 +187,7 @@ async def test_route_api_message_reuses_owned_session(monkeypatch):
     fake_manager.add_turn_calls = []
 
     router = routing.Router(llm=_FakeLLMEcho())
-    monkeypatch.setattr(routing, "db_session", _fake_db_session)
+    monkeypatch.setattr(routing, "session_scope", _fake_db_session)
     monkeypatch.setattr(routing, "SessionManager", fake_manager)
     monkeypatch.setattr(routing, "SessionRepository", _FakeSessionRepo)
     monkeypatch.setattr(router, "_load_context_for_user", lambda db, user_id: None)
@@ -226,7 +226,7 @@ async def test_route_api_message_ignores_session_owned_by_another_user(monkeypat
     fake_manager.add_turn_calls = []
 
     router = routing.Router(llm=_FakeLLMEcho())
-    monkeypatch.setattr(routing, "db_session", _fake_db_session)
+    monkeypatch.setattr(routing, "session_scope", _fake_db_session)
     monkeypatch.setattr(routing, "SessionManager", fake_manager)
     monkeypatch.setattr(routing, "SessionRepository", _FakeSessionRepo)
     monkeypatch.setattr(router, "_load_context_for_user", lambda db, user_id: None)
@@ -256,7 +256,7 @@ async def test_stream_api_message_yields_deltas_and_persists_on_completion(
     fake_manager.add_turn_calls = []
 
     router = routing.Router(llm=_FakeLLMEcho())
-    monkeypatch.setattr(routing, "db_session", _fake_db_session)
+    monkeypatch.setattr(routing, "session_scope", _fake_db_session)
     monkeypatch.setattr(routing, "SessionManager", fake_manager)
     monkeypatch.setattr(router, "_load_context_for_user", lambda db, user_id: None)
 
@@ -295,7 +295,7 @@ async def test_stream_api_message_persists_even_if_consumer_disconnects_early(
     fake_manager.add_turn_calls = []
 
     router = routing.Router(llm=_FakeLLMEcho())
-    monkeypatch.setattr(routing, "db_session", _fake_db_session)
+    monkeypatch.setattr(routing, "session_scope", _fake_db_session)
     monkeypatch.setattr(routing, "SessionManager", fake_manager)
     monkeypatch.setattr(router, "_load_context_for_user", lambda db, user_id: None)
 
@@ -334,7 +334,7 @@ async def test_stream_api_message_persists_partial_output_and_reraises_on_error(
     fake_manager.add_turn_calls = []
 
     router = routing.Router(llm=_FailingLLM())
-    monkeypatch.setattr(routing, "db_session", _fake_db_session)
+    monkeypatch.setattr(routing, "session_scope", _fake_db_session)
     monkeypatch.setattr(routing, "SessionManager", fake_manager)
     monkeypatch.setattr(router, "_load_context_for_user", lambda db, user_id: None)
 

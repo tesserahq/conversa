@@ -60,7 +60,7 @@ class SessionRepository(SoftDeleteRepository[Session]):
     def create_session(self, data: SessionCreate) -> Session:
         session = Session(**data.model_dump())
         self.db.add(session)
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(session)
         return session
 
@@ -73,7 +73,7 @@ class SessionRepository(SoftDeleteRepository[Session]):
         update_data = data.model_dump(exclude_unset=True)
         for key, value in update_data.items():
             setattr(session, key, value)
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(session)
         return session
 

@@ -44,6 +44,6 @@ class ContextSnapshotRepository:
             payload_hash=payload_hash,
         )
         self._db.add(snapshot)
-        self._db.commit()
+        self._db.flush()
         self._db.refresh(snapshot)
         return snapshot

@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.commands.install_channel_command import InstallChannelCommand
 from app.config import get_settings
-from app.db import get_db
+from app.db import DbSession
 from tessera_sdk.server.dependencies.auth import get_current_user
 
 logger = logging.getLogger(__name__)
@@ -56,9 +56,7 @@ async def slack_install(
 
 @router.get("/slack/callback")
 async def slack_callback(
-    code: str = Query(...),
-    state: str = Query(...),
-    db: Session = Depends(get_db),
+    db: DbSession, code: str = Query(...), state: str = Query(...)
 ) -> RedirectResponse:
     """Handle Slack OAuth callback: exchange code, store installation, fire event."""
     settings = get_settings()

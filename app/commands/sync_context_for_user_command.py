@@ -99,8 +99,16 @@ class SyncContextForUserCommand:
         had_fetch_errors = False
         now = datetime.now(timezone.utc)
 
+        states = {
+            source.id: state_svc.get_or_create_state(UUID(str(source.id)), user_id)
+            for source in sources
+        }
+        # commit: states_ready. New state rows are committed before any
+        # source is fetched over HTTP.
+        self.db.commit()
+
         for source in sources:
-            state = state_svc.get_or_create_state(UUID(str(source.id)), user_id)
+            state = states[source.id]
             result = fetcher.fetch(user_id, source, state)
             if result.error:
                 had_fetch_errors = True
@@ -109,6 +117,10 @@ class SyncContextForUserCommand:
             )
             if pack is not None:
                 packs_to_merge.append(pack)
+            # commit: source_synced. Per-source checkpoint: its sync state
+            # (etag, errors, next run) survives a failure of a later source,
+            # and the transaction opened while fetching it ends here.
+            self.db.commit()
 
         return packs_to_merge, had_fetch_errors
 

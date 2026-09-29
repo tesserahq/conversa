@@ -12,7 +12,7 @@ from app.constants.default_system_prompt import DefaultSystemPrompt
 from app.infra.logging_config import get_logger
 from app.repositories.mcp_delegated_token_repository import MCPDelegatedTokenRepository
 from app.repositories.system_prompt_repository import SystemPromptRepository
-from app.utils.db.db_session_helper import db_session
+from app.db import session_scope
 
 logger = get_logger()
 
@@ -239,7 +239,7 @@ def build_llm_runner_from_env() -> LLMRunner:
 
 
 def _get_system_prompt() -> str:
-    with db_session() as db:
+    with session_scope() as db:
         system_prompt = SystemPromptRepository(db).get_current_content(
             SYSTEM_PROMPT_NAME
         )

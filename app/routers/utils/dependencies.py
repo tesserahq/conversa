@@ -3,7 +3,7 @@ from uuid import UUID
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.db import get_db
+from app.db import DbSession
 from app.models.context_source import ContextSource
 from app.models.user import User
 from app.repositories.context_source_repository import ContextSourceRepository
@@ -12,7 +12,7 @@ from app.repositories.user_repository import UserRepository
 
 def get_user_by_id(
     user_id: UUID,
-    db: Session = Depends(get_db),
+    db: DbSession,
 ) -> User:
     """FastAPI dependency to get a user by ID."""
     user = UserRepository(db).get_user(user_id)
@@ -23,7 +23,7 @@ def get_user_by_id(
 
 def get_context_source_by_id(
     id: UUID,
-    db: Session = Depends(get_db),
+    db: DbSession,
 ) -> ContextSource:
     """FastAPI dependency to get a context source by ID."""
     source = ContextSourceRepository(db).get_context_source(id)

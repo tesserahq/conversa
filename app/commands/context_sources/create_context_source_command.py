@@ -12,6 +12,7 @@ from app.events.context_source_events import build_context_source_created_event
 from app.models.context_source import ContextSource
 from app.schemas.context_source import ContextSourceCreate
 from app.repositories.context_source_repository import ContextSourceRepository
+from app.db import on_commit
 from tessera_sdk.infra.events.nats_router import NatsEventPublisher  # type: ignore[import-untyped]
 
 
@@ -66,9 +67,15 @@ class CreateContextSourceCommand:
                 "Publishing context-source-created event to NATS: %s",
                 event.model_dump_json(),
             )
-            try:
-                self.nats_publisher.publish_sync(event, event.event_type)
-            except Exception:  # pragma: no cover - defensive logging
-                self.logger.exception(
-                    "Failed to publish context-source-created event to NATS"
-                )
+            publisher = self.nats_publisher
+
+            def publish() -> None:
+                try:
+                    publisher.publish_sync(event, event.event_type)
+                except Exception:  # pragma: no cover - defensive logging
+                    self.logger.exception(
+                        "Failed to publish context-source-created event to NATS"
+                    )
+
+            # Dispatch only after the transaction commits; dropped on rollback.
+            on_commit(publish)

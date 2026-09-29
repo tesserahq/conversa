@@ -16,7 +16,7 @@ from app.commands.context_sources import (
     UpdateContextSourceCommand,
 )
 from app.commands.sync_context_for_user_command import SyncContextForUserCommand
-from app.db import get_db
+from app.db import DbSession
 from app.models.context_source import ContextSource, ContextSourceState
 from app.models.user import User
 from app.routers.utils.dependencies import get_context_source_by_id, get_user_by_id
@@ -63,10 +63,10 @@ class ContextSyncResponse(BaseModel):
 @router.post("/sync/{user_id}", response_model=ContextSyncResponse)
 def trigger_context_sync(
     user_id: UUID,
+    db: DbSession,
     _user: User = Depends(get_user_by_id),
     _authorized: bool = Depends(rbac["update"]),
     _current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
 ) -> ContextSyncResponse:
     """Manually trigger context sync for a user. Fetches from all enabled sources, merges, and stores snapshot."""
     command = SyncContextForUserCommand(db)
@@ -82,10 +82,10 @@ def trigger_context_sync(
 
 @router.get("", response_model=Page[ContextSourceRead])
 def list_context_sources(
+    db: DbSession,
     params: Params = Depends(),
     _authorized: bool = Depends(rbac["read"]),
     _current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
 ) -> Page[ContextSourceRead]:
     """List all context sources with pagination."""
     svc = ContextSourceRepository(db)
@@ -96,9 +96,9 @@ def list_context_sources(
 @router.post("", response_model=ContextSourceRead, status_code=201)
 def create_context_source(
     data: ContextSourceCreate,
+    db: DbSession,
     _authorized: bool = Depends(rbac["create"]),
     _current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
 ) -> ContextSourceRead:
     """Create a new context source."""
     command = CreateContextSourceCommand(db)
@@ -138,12 +138,12 @@ def _to_state_reads(
 
 @router.get("/{id}/sync-state", response_model=Page[ContextSourceStateRead])
 def list_context_source_sync_state(
+    db: DbSession,
     search: Optional[str] = None,
     source: ContextSource = Depends(get_context_source_by_id),
     params: Params = Depends(),
     _authorized: bool = Depends(rbac["read"]),
     _current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
 ) -> Page[ContextSourceStateRead]:
     """List per-user sync state for a context source, optionally filtered by user email."""
     svc = ContextSourceStateRepository(db)
@@ -154,10 +154,10 @@ def list_context_source_sync_state(
 @router.patch("/{id}", response_model=ContextSourceRead)
 def update_context_source(
     data: ContextSourceUpdate,
+    db: DbSession,
     source: ContextSource = Depends(get_context_source_by_id),
     _authorized: bool = Depends(rbac["update"]),
     _current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
 ) -> ContextSourceRead:
     """Update a context source."""
     command = UpdateContextSourceCommand(db)
@@ -173,10 +173,10 @@ def update_context_source(
 
 @router.delete("/{id}", status_code=204)
 def delete_context_source(
+    db: DbSession,
     source: ContextSource = Depends(get_context_source_by_id),
     _authorized: bool = Depends(rbac["delete"]),
     _current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
 ) -> None:
     """Soft delete a context source."""
     command = DeleteContextSourceCommand(db)

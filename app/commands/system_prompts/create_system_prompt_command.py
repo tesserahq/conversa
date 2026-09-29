@@ -12,6 +12,7 @@ from app.events.system_prompt_events import build_system_prompt_created_event
 from app.models.system_prompt import SystemPrompt
 from app.schemas.system_prompt import SystemPromptCreate
 from app.repositories.system_prompt_repository import SystemPromptRepository
+from app.db import on_commit
 from tessera_sdk.infra.events.nats_router import NatsEventPublisher  # type: ignore[import-untyped]
 
 
@@ -70,9 +71,15 @@ class CreateSystemPromptCommand:
                 "Publishing system-prompt-created event to NATS: %s",
                 event.model_dump_json(),
             )
-            try:
-                self.nats_publisher.publish_sync(event, event.event_type)
-            except Exception:  # pragma: no cover - defensive logging
-                self.logger.exception(
-                    "Failed to publish system-prompt-created event to NATS"
-                )
+            publisher = self.nats_publisher
+
+            def publish() -> None:
+                try:
+                    publisher.publish_sync(event, event.event_type)
+                except Exception:  # pragma: no cover - defensive logging
+                    self.logger.exception(
+                        "Failed to publish system-prompt-created event to NATS"
+                    )
+
+            # Dispatch only after the transaction commits; dropped on rollback.
+            on_commit(publish)

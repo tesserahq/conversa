@@ -50,7 +50,7 @@ class ContextSourceStateRepository:
             user_id=user_id,
         )
         self._db.add(state)
-        self._db.commit()
+        self._db.flush()
         self._db.refresh(state)
         return state
 
@@ -78,7 +78,7 @@ class ContextSourceStateRepository:
             state.since_cursor = since_cursor
         if next_run_at is not None:
             state.next_run_at = next_run_at
-        self._db.commit()
+        self._db.flush()
         self._db.refresh(state)
 
     def get_states_query(

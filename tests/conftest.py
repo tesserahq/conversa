@@ -13,6 +13,8 @@ from sqlalchemy.orm import sessionmaker
 from fastapi import Request
 from fastapi.security import HTTPAuthorizationCredentials
 from app.db import get_db
+from tessera_sdk.testing import execution_boundary as sdk_execution_boundary
+from tessera_sdk.testing import managed_db_override
 from unittest.mock import patch
 from starlette.middleware.base import BaseHTTPMiddleware
 from alembic import command
@@ -131,8 +133,10 @@ def db(engine):
     connection = engine.connect()
     transaction = connection.begin()
 
-    # bind an individual Session to the connection
-    Session = sessionmaker(bind=connection)
+    # Bind an individual Session to the connection. "create_savepoint" makes
+    # the session's commit/rollback act on a savepoint, so a rollback inside
+    # the code under test does not discard fixture data.
+    Session = sessionmaker(bind=connection, join_transaction_mode="create_savepoint")
     session = Session()
 
     yield session
@@ -147,6 +151,14 @@ def db(engine):
 
     # return connection to the Engine
     connection.close()
+
+
+@pytest.fixture(scope="function")
+def execution_boundary(db):
+    """Run code the way an entry point does (app.db.session_scope): commit
+    on success, roll back on error. Fixture data staged before entering is
+    committed first, so a rollback only undoes the code under test."""
+    return lambda: sdk_execution_boundary(db)
 
 
 @pytest.fixture(scope="function")
@@ -171,12 +183,6 @@ def create_client_fixture(user_fixture_name):
         # Get the user from the specified fixture
         test_user = request.getfixturevalue(user_fixture_name)
 
-        def override_get_db():
-            try:
-                yield db
-            finally:
-                pass  # Don't close the session here, it's handled by the db fixture
-
         # Create app with testing mode ON (no auth middleware)
         logger.debug("Creating app with testing mode ON")
         app = create_app(testing=True, auth_middleware=MockAuthenticationMiddleware)
@@ -189,7 +195,9 @@ def create_client_fixture(user_fixture_name):
             return test_user
 
         # Override dependencies
-        app.dependency_overrides[get_db] = override_get_db
+        # Same contract as app.db.get_db, bound to the test session (which the
+        # db fixture closes).
+        app.dependency_overrides[get_db] = managed_db_override(db)
         app.dependency_overrides[get_current_user] = override_get_current_user
 
         # Create test client with auth headers (raise_server_exceptions=False so

@@ -78,7 +78,7 @@ class ContextSourceRepository(SoftDeleteRepository[ContextSource]):
             enabled=data.enabled,
         )
         self.db.add(source)
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(source)
         return source
 
@@ -112,7 +112,7 @@ class ContextSourceRepository(SoftDeleteRepository[ContextSource]):
         if data.enabled is not None:
             source.enabled = data.enabled
 
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(source)
         return source
 
