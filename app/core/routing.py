@@ -168,25 +168,15 @@ class Router:
         msg, resolved_session_id, history, context = await self._prepare_api_message(
             user_id, user_content, session_id
         )
-        if include_events:
-            result = await self._llm.run_with_events(
-                msg,
-                history=history,
-                context=context,
-                user_id=user_id,
-                project_id=project_id,
-                client_context=client_context,
-            )
-        else:
-            text = await self._llm.run(
-                msg,
-                history=history,
-                context=context,
-                user_id=user_id,
-                project_id=project_id,
-                client_context=client_context,
-            )
-            result = CompletionResult(text=text)
+        result = await self._llm.collect(
+            msg,
+            history=history,
+            context=context,
+            user_id=user_id,
+            project_id=project_id,
+            client_context=client_context,
+            include_events=include_events,
+        )
         outbound = OutboundMessage(
             channel=API_CHANNEL,
             account_id=None,

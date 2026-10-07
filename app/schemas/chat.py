@@ -5,9 +5,9 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, Field, model_validator
-from tessera_sdk.clients.modela import ChatCompletionExtensions
-from tessera_sdk.mcp import CompletionInclude
+from pydantic import BaseModel, Field, model_serializer, model_validator
+from tessera_sdk.infra.events import Event
+from tessera_sdk.mcp import CompletionInclude, TruncationMarker
 
 
 class ChatMessageInput(BaseModel):
@@ -60,10 +60,35 @@ class ChatCompletionChoiceOut(BaseModel):
     finish_reason: str
 
 
+class ChatCompletionEventExtensionsOut(BaseModel):
+    """The only extension channel Conversa forwards: committed domain events.
+
+    ``truncations`` is omitted when empty; events are serialized in full so
+    this body matches the streaming and error-response shapes.
+    """
+
+    events: list[Event] = Field(default_factory=list)
+    truncations: list[TruncationMarker] = Field(default_factory=list)
+
+    @model_serializer(mode="wrap")
+    def _omit_empty_truncations(self, handler):
+        data = handler(self)
+        if not self.truncations:
+            data.pop("truncations", None)
+        return data
+
+
 class ChatCompletionResponseOut(BaseModel):
     id: str
     object: str
     created: int
     model: str
     choices: list[ChatCompletionChoiceOut]
-    extensions: ChatCompletionExtensions | None = None
+    extensions: ChatCompletionEventExtensionsOut | None = None
+
+    @model_serializer(mode="wrap")
+    def _omit_absent_extensions(self, handler):
+        data = handler(self)
+        if self.extensions is None:
+            data.pop("extensions", None)
+        return data

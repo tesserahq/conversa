@@ -1,9 +1,10 @@
 """Tests for the direct chat API endpoint (POST /chat/completions)."""
 
 import json
+from types import SimpleNamespace
 from uuid import uuid4
 
-from tessera_sdk.clients.modela import ModelaServerError
+from tessera_sdk.clients.modela import ModelaAuthenticationError, ModelaServerError
 from tessera_sdk.infra.events import Event
 
 from app.core.completion_output import (
@@ -274,6 +275,58 @@ def test_create_chat_completion_preserves_events_on_modela_failure(client, setup
     assert response.status_code == 502
     assert response.json()["extensions"]["events"][0]["id"] == "event-1"
     assert "tool_executions" not in response.json()["extensions"]
+
+
+def test_completion_failure_hides_upstream_status_and_message_in_production(
+    client, setup_user, monkeypatch
+):
+    event = Event(source="/linden/persons", event_type="person.created")
+
+    class _FailingRouter(_FakeRouter):
+        async def route_api_completion(self, **kwargs):
+            raise CompletionFailure(
+                ModelaAuthenticationError("token rejected by https://modela.internal"),
+                events=(event,),
+            )
+
+    client.app.dependency_overrides[get_router] = _FailingRouter
+    monkeypatch.setattr(
+        "app.exceptions.handlers.get_settings",
+        lambda: SimpleNamespace(is_production=True),
+    )
+
+    response = client.post(
+        "/chat/completions",
+        json={
+            "messages": [{"role": "user", "content": "Create a person"}],
+            "include": ["events"],
+        },
+    )
+
+    assert response.status_code == 502
+    body = response.json()
+    assert body["details"] == []
+    assert "modela.internal" not in response.text
+    assert body["extensions"]["events"][0]["id"] == event.id
+
+
+def test_non_streaming_events_keep_default_and_null_fields(client, setup_user):
+    event = Event(source="/linden/persons", event_type="person.created")
+    fake_router = _FakeRouter(deltas=[CompletionEvent(event)])
+    client.app.dependency_overrides[get_router] = lambda: fake_router
+
+    response = client.post(
+        "/chat/completions",
+        json={
+            "messages": [{"role": "user", "content": "Create a person"}],
+            "include": ["events"],
+        },
+    )
+
+    assert response.status_code == 200, response.json()
+    extensions = response.json()["extensions"]
+    assert extensions["events"] == [event.model_dump(mode="json")]
+    assert "truncations" not in extensions
 
 
 def test_create_chat_completion_rejects_tool_execution_channel(client, setup_user):

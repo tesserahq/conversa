@@ -119,6 +119,9 @@ class _FakeLLMEcho:
     async def run(self, *_args, **kwargs):
         return "assistant reply"
 
+    async def collect(self, *_args, **kwargs):
+        return CompletionResult(text="assistant reply")
+
     async def stream(self, *_args, **kwargs):
         for delta in ("assistant ", "reply"):
             yield CompletionTextDelta(delta)
@@ -427,7 +430,7 @@ async def test_route_api_completion_returns_events_without_persisting_them(monke
     )
 
     class _EventLLM:
-        async def run_with_events(self, *_args, **kwargs):
+        async def collect(self, *_args, **kwargs):
             return CompletionResult(text="Created person.", events=(event,))
 
     @contextmanager

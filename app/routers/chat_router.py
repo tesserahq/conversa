@@ -23,6 +23,7 @@ from app.core.routing import Router
 from app.schemas.chat import (
     ChatCompletionChoiceOut,
     ChatCompletionCreate,
+    ChatCompletionEventExtensionsOut,
     ChatCompletionMessageOut,
     ChatCompletionResponseOut,
 )
@@ -115,8 +116,6 @@ async def _sse_chunks(
 @chat_router.post(
     "/chat/completions",
     response_model=ChatCompletionResponseOut,
-    response_model_exclude_unset=True,
-    response_model_exclude_none=True,
 )
 async def create_chat_completion(
     payload: ChatCompletionCreate,
@@ -159,10 +158,9 @@ async def create_chat_completion(
 
     extensions = None
     if payload.wants_events:
-        extension_values = {"events": list(result.events)}
-        if result.truncations:
-            extension_values["truncations"] = list(result.truncations)
-        extensions = extension_values
+        extensions = ChatCompletionEventExtensionsOut(
+            events=list(result.events), truncations=list(result.truncations)
+        )
 
     return ChatCompletionResponseOut(
         id=f"chatcmpl-{uuid.uuid4().hex}",

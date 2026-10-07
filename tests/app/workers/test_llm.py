@@ -264,7 +264,7 @@ async def test_stream_requests_and_yields_only_event_channel_metadata(monkeypatc
 
 
 @pytest.mark.asyncio
-async def test_run_with_events_preserves_inline_and_error_response_events(monkeypatch):
+async def test_collect_preserves_inline_and_error_response_events(monkeypatch):
     inline_event = _event("event-inline")
     error_event = _event("event-error")
     marker = TruncationMarker(channel=CompletionInclude.EVENTS, dropped_count=1)
@@ -291,11 +291,91 @@ async def test_run_with_events_preserves_inline_and_error_response_events(monkey
     )
 
     with pytest.raises(CompletionFailure) as failure:
-        await runner.run_with_events(_inbound("create"), user_id=uuid4())
+        await runner.collect(_inbound("create"), user_id=uuid4(), include_events=True)
 
     assert failure.value.original_error.status_code == 502
     assert failure.value.events == (inline_event, error_event)
     assert failure.value.truncations == (marker,)
+
+
+def _runner_with_client(monkeypatch, client_cls) -> LLMRunner:
+    monkeypatch.setattr(llm_module, "ModelaClient", client_cls)
+    return LLMRunner(
+        system_prompt="s",
+        modela_audience="modela",
+        modela_scopes="scope",
+        token_repo=_FakeTokenRepo("t"),
+    )
+
+
+@pytest.mark.asyncio
+async def test_stream_yields_error_body_events_before_raising(monkeypatch):
+    error_event = _event("event-error")
+
+    class _FailingModelaClient:
+        def __init__(self, **kwargs):
+            pass
+
+        async def stream_complete(self, **kwargs):
+            raise ModelaServerError(
+                "upstream failed", status_code=500, events=(error_event,)
+            )
+            yield  # pragma: no cover - makes this an async generator
+
+    runner = _runner_with_client(monkeypatch, _FailingModelaClient)
+    items = []
+    with pytest.raises(ModelaServerError):
+        async for item in runner.stream(
+            _inbound("create"), user_id=uuid4(), include_events=True
+        ):
+            items.append(item)
+
+    assert items == [CompletionEvent(error_event)]
+
+
+@pytest.mark.asyncio
+async def test_stream_deduplicates_error_body_events_without_wire_id(monkeypatch):
+    payload = {
+        "source": "/linden/persons",
+        "event_type": "person.created",
+        "time": "2026-10-07T10:00:00Z",
+    }
+    inline_event = Event(**payload)
+    error_copy = Event(**payload)
+    assert inline_event.id != error_copy.id
+
+    class _FailingModelaClient:
+        def __init__(self, **kwargs):
+            pass
+
+        async def stream_complete(self, **kwargs):
+            yield _extension_chunk(event=inline_event)
+            raise ModelaServerError(
+                "upstream failed", status_code=500, events=(error_copy,)
+            )
+
+    runner = _runner_with_client(monkeypatch, _FailingModelaClient)
+
+    with pytest.raises(CompletionFailure) as failure:
+        await runner.collect(_inbound("create"), user_id=uuid4(), include_events=True)
+
+    assert failure.value.events == (inline_event,)
+
+
+@pytest.mark.asyncio
+async def test_collect_reraises_original_error_when_no_events_observed(monkeypatch):
+    class _FailingModelaClient:
+        def __init__(self, **kwargs):
+            pass
+
+        async def stream_complete(self, **kwargs):
+            raise ModelaServerError("upstream failed", status_code=500)
+            yield  # pragma: no cover - makes this an async generator
+
+    runner = _runner_with_client(monkeypatch, _FailingModelaClient)
+
+    with pytest.raises(ModelaServerError):
+        await runner.collect(_inbound("create"), user_id=uuid4(), include_events=True)
 
 
 @pytest.mark.asyncio

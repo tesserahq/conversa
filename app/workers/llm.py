@@ -5,7 +5,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 from uuid import UUID
 
-from tessera_sdk.clients.modela import CompletionMessage, ModelaClient
+from tessera_sdk.clients.modela import CompletionMessage, ModelaClient, ModelaError
 from tessera_sdk.infra.events import Event
 from tessera_sdk.mcp import CompletionInclude, TruncationMarker
 
@@ -197,21 +197,44 @@ class LLMRunner:
         if include_events:
             stream_kwargs["include"] = [CompletionInclude.EVENTS]
 
-        async for chunk in client.stream_complete(**stream_kwargs):
-            chunk_count += 1
-            extensions = chunk.extensions
-            if include_events and extensions is not None:
-                if extensions.event is not None:
-                    yield CompletionEvent(extensions.event)
-                marker = extensions.truncation
-                if marker is not None and marker.channel is CompletionInclude.EVENTS:
-                    yield CompletionTruncation(marker)
-            if not chunk.choices:
-                continue
-            delta = chunk.choices[0].delta.content
-            if delta:
-                reply_length += len(delta)
-                yield CompletionTextDelta(delta)
+        yielded_events: set[tuple] = set()
+        dropped_by_channel: dict[CompletionInclude, int] = {}
+        try:
+            async for chunk in client.stream_complete(**stream_kwargs):
+                chunk_count += 1
+                extensions = chunk.extensions
+                if include_events and extensions is not None:
+                    if extensions.event is not None:
+                        yielded_events.add(_event_identity(extensions.event))
+                        yield CompletionEvent(extensions.event)
+                    marker = extensions.truncation
+                    if (
+                        marker is not None
+                        and marker.channel is CompletionInclude.EVENTS
+                    ):
+                        dropped_by_channel[marker.channel] = marker.dropped_count
+                        yield CompletionTruncation(marker)
+                if not chunk.choices:
+                    continue
+                delta = chunk.choices[0].delta.content
+                if delta:
+                    reply_length += len(delta)
+                    yield CompletionTextDelta(delta)
+        except ModelaError as error:
+            # Modela repeats committed events in the error body; surface the
+            # ones not already delivered inline before propagating the failure.
+            if include_events:
+                for event in error.events:
+                    if _event_identity(event) not in yielded_events:
+                        yielded_events.add(_event_identity(event))
+                        yield CompletionEvent(event)
+                for marker in error.truncations:
+                    if marker.dropped_count > dropped_by_channel.get(
+                        marker.channel, -1
+                    ):
+                        dropped_by_channel[marker.channel] = marker.dropped_count
+                        yield CompletionTruncation(marker)
+            raise
 
         logger.info(
             "Finished Modela stream user_id=%s chunks=%d reply_text_length=%d",
@@ -233,20 +256,17 @@ class LLMRunner:
         client_context: dict[str, Any] | None = None,
     ) -> str:
         """Non-streaming convenience wrapper: joins the full streamed reply."""
-        parts: list[str] = []
-        async for item in self.stream(
+        result = await self.collect(
             msg,
             history=history,
             context=context,
             user_id=user_id,
             project_id=project_id,
             client_context=client_context,
-        ):
-            if isinstance(item, CompletionTextDelta):
-                parts.append(item.text)
-        return "".join(parts)
+        )
+        return result.text
 
-    async def run_with_events(
+    async def collect(
         self,
         msg: InboundMessage,
         history: list[dict[str, str]] | None = None,
@@ -255,11 +275,17 @@ class LLMRunner:
         user_id: UUID | None = None,
         project_id: str = "*",
         client_context: dict[str, Any] | None = None,
+        include_events: bool = False,
     ) -> CompletionResult:
-        """Collect one API completion without persisting response metadata."""
+        """Collect one completion without persisting response metadata.
+
+        A failure is wrapped in CompletionFailure only when committed events
+        were observed, so callers that cannot see events (or saw none) get
+        the original exception and the same error contract either way.
+        """
         text_parts: list[str] = []
         events: list[Event] = []
-        truncations: list[TruncationMarker] = []
+        truncations: dict[CompletionInclude, TruncationMarker] = {}
         try:
             async for item in self.stream(
                 msg,
@@ -268,55 +294,45 @@ class LLMRunner:
                 user_id=user_id,
                 project_id=project_id,
                 client_context=client_context,
-                include_events=True,
+                include_events=include_events,
             ):
                 if isinstance(item, CompletionTextDelta):
                     text_parts.append(item.text)
                 elif isinstance(item, CompletionEvent):
                     events.append(item.event)
                 elif isinstance(item, CompletionTruncation):
-                    truncations.append(item.marker)
+                    # stream() only yields a later marker when it reports more drops.
+                    truncations[item.marker.channel] = item.marker
         except Exception as error:
+            if not events:
+                raise
             raise CompletionFailure(
                 error,
-                events=_merge_events(events, getattr(error, "events", ())),
-                truncations=_merge_truncations(
-                    truncations, getattr(error, "truncations", ())
-                ),
+                events=tuple(events),
+                truncations=tuple(truncations.values()),
             ) from error
         return CompletionResult(
             text="".join(text_parts),
             events=tuple(events),
-            truncations=tuple(truncations),
+            truncations=tuple(truncations.values()),
         )
 
 
-def _merge_events(*groups) -> tuple[Event, ...]:
-    """Preserve order while deduplicating inline and error-body delivery."""
-    merged: list[Event] = []
-    seen: set[tuple[str, str]] = set()
-    for group in groups:
-        for event in group:
-            if not isinstance(event, Event):
-                continue
-            identity = (event.source, event.id)
-            if identity not in seen:
-                seen.add(identity)
-                merged.append(event)
-    return tuple(merged)
+def _event_identity(event: Event) -> tuple:
+    """Identify an event across inline and error-body delivery.
 
-
-def _merge_truncations(*groups) -> tuple[TruncationMarker, ...]:
-    """Keep one marker per channel, preferring the largest final drop count."""
-    by_channel: dict[CompletionInclude, TruncationMarker] = {}
-    for group in groups:
-        for marker in group:
-            if not isinstance(marker, TruncationMarker):
-                continue
-            current = by_channel.get(marker.channel)
-            if current is None or marker.dropped_count > current.dropped_count:
-                by_channel[marker.channel] = marker
-    return tuple(by_channel.values())
+    Event.id defaults to a fresh uuid4 when Modela omits it, so an id that
+    was not on the wire cannot identify the event; fall back to its content.
+    """
+    if "id" in event.model_fields_set:
+        return (event.source, event.id)
+    return (
+        "content",
+        json.dumps(
+            event.model_dump(mode="json", include=event.model_fields_set),
+            sort_keys=True,
+        ),
+    )
 
 
 def build_llm_runner_from_env() -> LLMRunner:
