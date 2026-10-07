@@ -5,18 +5,25 @@ from __future__ import annotations
 import json
 import time
 import uuid
-from typing import Any, AsyncIterator, Optional
+from collections.abc import AsyncIterator
 from json import JSONDecodeError
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from typing import Any
+
+from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import StreamingResponse
 from tessera_sdk.server.dependencies.auth import get_current_user
 
 from app.auth.rbac import build_rbac_dependencies
+from app.core.completion_output import (
+    CompletionStreamExtension,
+    CompletionStreamItem,
+)
 from app.core.rate_limit import enforce_user_rate_limit
 from app.core.routing import Router
 from app.schemas.chat import (
     ChatCompletionChoiceOut,
     ChatCompletionCreate,
+    ChatCompletionEventExtensionsOut,
     ChatCompletionMessageOut,
     ChatCompletionResponseOut,
 )
@@ -36,7 +43,7 @@ def get_router() -> Router:
     return state.router
 
 
-async def infer_domain(request: Request) -> Optional[str]:
+async def infer_domain(request: Request) -> str | None:
     project_id = request.query_params.get("project_id")
 
     if not project_id:
@@ -60,13 +67,22 @@ SESSION_ID_HEADER = "X-Conversa-Session-Id"
 
 
 async def _sse_chunks(
-    delta_gen: AsyncIterator[str], completion_id: str, created_ts: int
+    item_gen: AsyncIterator[CompletionStreamItem], completion_id: str, created_ts: int
 ) -> AsyncIterator[str]:
-    """Render text deltas as OpenAI chat.completion.chunk SSE events,
-    matching the shape Modela's own /chat/completions already emits.
-    """
+    """Render typed output using Modela's Chat Completions wire shape."""
     first = True
-    async for delta in delta_gen:
+    async for item in item_gen:
+        if isinstance(item, CompletionStreamExtension):
+            chunk = {
+                "id": completion_id,
+                "object": "chat.completion.chunk",
+                "created": created_ts,
+                "model": "conversa",
+                "choices": [],
+                "extensions": {item.wire_field: item.wire_value()},
+            }
+            yield f"data: {json.dumps(chunk)}\n\n"
+            continue
         chunk = {
             "id": completion_id,
             "object": "chat.completion.chunk",
@@ -76,9 +92,9 @@ async def _sse_chunks(
                 {
                     "index": 0,
                     "delta": (
-                        {"role": "assistant", "content": delta}
+                        {"role": "assistant", "content": item.text}
                         if first
-                        else {"content": delta}
+                        else {"content": item.text}
                     ),
                     "finish_reason": None,
                 }
@@ -114,29 +130,37 @@ async def create_chat_completion(
     project_id = getattr(request.state, "project_id", "*")
 
     if payload.stream:
-        session_id, delta_gen = await router.stream_api_message(
+        session_id, item_gen = await router.stream_api_message(
             user_id=current_user.id,
             user_content=user_content,
             session_id=payload.session_id,
             project_id=project_id,
             client_context=payload.client_context,
+            include_events=payload.wants_events,
         )
         completion_id = f"chatcmpl-{uuid.uuid4().hex}"
         created_ts = int(time.time())
         return StreamingResponse(
-            _sse_chunks(delta_gen, completion_id, created_ts),
+            _sse_chunks(item_gen, completion_id, created_ts),
             media_type="text/event-stream",
             headers={SESSION_ID_HEADER: str(session_id)},
         )
 
-    outbound, session_id = await router.route_api_message(
+    outbound, session_id, result = await router.route_api_completion(
         user_id=current_user.id,
         user_content=user_content,
         session_id=payload.session_id,
         project_id=project_id,
         client_context=payload.client_context,
+        include_events=payload.wants_events,
     )
     response.headers[SESSION_ID_HEADER] = str(session_id)
+
+    extensions = None
+    if payload.wants_events:
+        extensions = ChatCompletionEventExtensionsOut(
+            events=list(result.events), truncations=list(result.truncations)
+        )
 
     return ChatCompletionResponseOut(
         id=f"chatcmpl-{uuid.uuid4().hex}",
@@ -152,4 +176,5 @@ async def create_chat_completion(
                 finish_reason="stop",
             )
         ],
+        extensions=extensions,
     )

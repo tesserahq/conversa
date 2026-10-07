@@ -5,7 +5,9 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_serializer, model_validator
+from tessera_sdk.infra.events import Event
+from tessera_sdk.mcp import CompletionInclude, TruncationMarker
 
 
 class ChatMessageInput(BaseModel):
@@ -23,6 +25,7 @@ class ChatCompletionCreate(BaseModel):
 
     messages: list[ChatMessageInput] = Field(min_length=1)
     stream: bool = False
+    include: list[CompletionInclude] | None = None
     session_id: UUID | None = None
     client_context: dict[str, Any] | None = Field(
         default=None,
@@ -33,6 +36,17 @@ class ChatCompletionCreate(BaseModel):
             "for access control decisions."
         ),
     )
+
+    @model_validator(mode="after")
+    def allow_application_event_channel_only(self):
+        unsupported = set(self.include or ()) - {CompletionInclude.EVENTS}
+        if unsupported:
+            raise ValueError("Conversa only supports include=['events']")
+        return self
+
+    @property
+    def wants_events(self) -> bool:
+        return CompletionInclude.EVENTS in (self.include or ())
 
 
 class ChatCompletionMessageOut(BaseModel):
@@ -46,9 +60,35 @@ class ChatCompletionChoiceOut(BaseModel):
     finish_reason: str
 
 
+class ChatCompletionEventExtensionsOut(BaseModel):
+    """The only extension channel Conversa forwards: committed domain events.
+
+    ``truncations`` is omitted when empty; events are serialized in full so
+    this body matches the streaming and error-response shapes.
+    """
+
+    events: list[Event] = Field(default_factory=list)
+    truncations: list[TruncationMarker] = Field(default_factory=list)
+
+    @model_serializer(mode="wrap")
+    def _omit_empty_truncations(self, handler):
+        data = handler(self)
+        if not self.truncations:
+            data.pop("truncations", None)
+        return data
+
+
 class ChatCompletionResponseOut(BaseModel):
     id: str
     object: str
     created: int
     model: str
     choices: list[ChatCompletionChoiceOut]
+    extensions: ChatCompletionEventExtensionsOut | None = None
+
+    @model_serializer(mode="wrap")
+    def _omit_absent_extensions(self, handler):
+        data = handler(self)
+        if self.extensions is None:
+            data.pop("extensions", None)
+        return data
