@@ -379,6 +379,62 @@ async def test_collect_reraises_original_error_when_no_events_observed(monkeypat
 
 
 @pytest.mark.asyncio
+async def test_collect_preserves_events_truncation_when_no_events_were_retained(
+    monkeypatch,
+):
+    marker = TruncationMarker(channel=CompletionInclude.EVENTS, dropped_count=2)
+
+    class _FailingModelaClient:
+        def __init__(self, **kwargs):
+            pass
+
+        async def stream_complete(self, **kwargs):
+            raise ModelaServerError(
+                "upstream failed", status_code=500, truncations=(marker,)
+            )
+            yield  # pragma: no cover - makes this an async generator
+
+    runner = _runner_with_client(monkeypatch, _FailingModelaClient)
+
+    with pytest.raises(CompletionFailure) as failure:
+        await runner.collect(_inbound("create"), user_id=uuid4(), include_events=True)
+
+    assert failure.value.events == ()
+    assert failure.value.truncations == (marker,)
+
+
+@pytest.mark.asyncio
+async def test_stream_ignores_non_event_truncations_from_error_body(monkeypatch):
+    event_marker = TruncationMarker(channel=CompletionInclude.EVENTS, dropped_count=1)
+    tool_marker = TruncationMarker(
+        channel=CompletionInclude.TOOL_EXECUTIONS, dropped_count=3
+    )
+
+    class _FailingModelaClient:
+        def __init__(self, **kwargs):
+            pass
+
+        async def stream_complete(self, **kwargs):
+            raise ModelaServerError(
+                "upstream failed",
+                status_code=500,
+                truncations=(tool_marker, event_marker),
+            )
+            yield  # pragma: no cover - makes this an async generator
+
+    runner = _runner_with_client(monkeypatch, _FailingModelaClient)
+    items = []
+
+    with pytest.raises(ModelaServerError):
+        async for item in runner.stream(
+            _inbound("create"), user_id=uuid4(), include_events=True
+        ):
+            items.append(item)
+
+    assert items == [CompletionTruncation(event_marker)]
+
+
+@pytest.mark.asyncio
 async def test_run_raises_when_modela_stream_is_empty(monkeypatch):
     class _EmptyModelaClient:
         def __init__(self, **kwargs):

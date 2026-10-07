@@ -229,8 +229,10 @@ class LLMRunner:
                         yielded_events.add(_event_identity(event))
                         yield CompletionEvent(event)
                 for marker in error.truncations:
-                    if marker.dropped_count > dropped_by_channel.get(
-                        marker.channel, -1
+                    if (
+                        marker.channel is CompletionInclude.EVENTS
+                        and marker.dropped_count
+                        > dropped_by_channel.get(marker.channel, -1)
                     ):
                         dropped_by_channel[marker.channel] = marker.dropped_count
                         yield CompletionTruncation(marker)
@@ -304,7 +306,7 @@ class LLMRunner:
                     # stream() only yields a later marker when it reports more drops.
                     truncations[item.marker.channel] = item.marker
         except Exception as error:
-            if not events:
+            if not events and not truncations:
                 raise
             raise CompletionFailure(
                 error,
