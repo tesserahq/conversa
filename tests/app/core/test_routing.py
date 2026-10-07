@@ -1,13 +1,21 @@
 """Tests for message routing."""
 
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
+from typing import ClassVar
 from uuid import uuid4
 
-import app.core.routing as routing
 import pytest
+from tessera_sdk.infra.events import Event
+
 from app.channels.envelope import InboundMessage
+from app.core import routing
+from app.core.completion_output import (
+    CompletionEvent,
+    CompletionResult,
+    CompletionTextDelta,
+)
 
 
 def _inbound_message() -> InboundMessage:
@@ -19,7 +27,7 @@ def _inbound_message() -> InboundMessage:
         thread_id=None,
         message_id="msg-1",
         text="hello",
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         raw={},
     )
 
@@ -113,12 +121,12 @@ class _FakeLLMEcho:
 
     async def stream(self, *_args, **kwargs):
         for delta in ("assistant ", "reply"):
-            yield delta
+            yield CompletionTextDelta(delta)
 
 
 class _FakeSessionManagerForApi:
-    created_calls: list = []
-    add_turn_calls: list = []
+    created_calls: ClassVar[list] = []
+    add_turn_calls: ClassVar[list] = []
 
     def __init__(self, db):
         self._db = db
@@ -130,8 +138,8 @@ class _FakeSessionManagerForApi:
     def get_history_for_llm(self, _session_id, limit=50):
         return []
 
-    def add_turn(self, session_id, _msg, _outbound):
-        self.add_turn_calls.append(session_id)
+    def add_turn(self, session_id, _msg, outbound):
+        self.add_turn_calls.append({"session_id": session_id, "text": outbound.text})
 
 
 @pytest.mark.asyncio
@@ -160,7 +168,9 @@ async def test_route_api_message_creates_new_session_when_no_session_id(monkeypa
     assert session_id == "new-session"
     assert fake_manager.created_calls[0]["user_id"] == user_id
     assert fake_manager.created_calls[0]["msg"].text == "Hello there"
-    assert fake_manager.add_turn_calls == ["new-session"]
+    assert fake_manager.add_turn_calls == [
+        {"session_id": "new-session", "text": "assistant reply"}
+    ]
 
 
 @pytest.mark.asyncio
@@ -200,7 +210,9 @@ async def test_route_api_message_reuses_owned_session(monkeypatch):
     assert outbound.chat_id == "existing-chat"
     # No new session was created since the existing one was reused.
     assert fake_manager.created_calls == []
-    assert fake_manager.add_turn_calls == [existing_session_id]
+    assert fake_manager.add_turn_calls == [
+        {"session_id": existing_session_id, "text": "assistant reply"}
+    ]
 
 
 @pytest.mark.asyncio
@@ -231,7 +243,7 @@ async def test_route_api_message_ignores_session_owned_by_another_user(monkeypat
     monkeypatch.setattr(routing, "SessionRepository", _FakeSessionRepo)
     monkeypatch.setattr(router, "_load_context_for_user", lambda db, user_id: None)
 
-    outbound, session_id = await router.route_api_message(
+    _outbound, session_id = await router.route_api_message(
         user_id=user_id, user_content="Hi", session_id=other_users_session_id
     )
 
@@ -270,9 +282,11 @@ async def test_stream_api_message_yields_deltas_and_persists_on_completion(
 
     deltas = [d async for d in delta_gen]
 
-    assert deltas == ["assistant ", "reply"]
+    assert deltas == [CompletionTextDelta("assistant "), CompletionTextDelta("reply")]
     # Persisted only once the generator is fully drained.
-    assert fake_manager.add_turn_calls == ["new-session"]
+    assert fake_manager.add_turn_calls == [
+        {"session_id": "new-session", "text": "assistant reply"}
+    ]
 
 
 @pytest.mark.asyncio
@@ -311,7 +325,9 @@ async def test_stream_api_message_persists_even_if_consumer_disconnects_early(
     # generator, so it keeps running to completion on its own.
     await background_task
 
-    assert fake_manager.add_turn_calls == ["new-session"]
+    assert fake_manager.add_turn_calls == [
+        {"session_id": "new-session", "text": "assistant reply"}
+    ]
 
 
 @pytest.mark.asyncio
@@ -326,7 +342,7 @@ async def test_stream_api_message_persists_partial_output_and_reraises_on_error(
 
     class _FailingLLM:
         async def stream(self, *_args, **kwargs):
-            yield "partial "
+            yield CompletionTextDelta("partial ")
             raise RuntimeError("Modela dropped the connection")
 
     fake_manager = _FakeSessionManagerForApi
@@ -347,6 +363,93 @@ async def test_stream_api_message_persists_partial_output_and_reraises_on_error(
         async for delta in delta_gen:
             deltas.append(delta)
 
-    assert deltas == ["partial "]
+    assert deltas == [CompletionTextDelta("partial ")]
     # The partial reply generated before the error is still persisted.
-    assert fake_manager.add_turn_calls == ["new-session"]
+    assert fake_manager.add_turn_calls == [
+        {"session_id": "new-session", "text": "partial "}
+    ]
+
+
+@pytest.mark.asyncio
+async def test_stream_api_message_forwards_events_but_persists_only_text(monkeypatch):
+    event = Event(
+        id="event-1",
+        source="/linden/persons",
+        event_type="person.created",
+        time="2026-10-07T10:00:00Z",
+        tags=["origin:mcp"],
+        event_data={"resource": {"type": "person", "id": "person-1"}},
+    )
+
+    class _EventLLM:
+        async def stream(self, *_args, **kwargs):
+            assert kwargs["include_events"] is True
+            yield CompletionTextDelta("Created")
+            yield CompletionEvent(event)
+            yield CompletionTextDelta(" person.")
+
+    @contextmanager
+    def _fake_db_session():
+        yield object()
+
+    fake_manager = _FakeSessionManagerForApi
+    fake_manager.created_calls = []
+    fake_manager.add_turn_calls = []
+    router = routing.Router(llm=_EventLLM())
+    monkeypatch.setattr(routing, "session_scope", _fake_db_session)
+    monkeypatch.setattr(routing, "SessionManager", fake_manager)
+    monkeypatch.setattr(router, "_load_context_for_user", lambda db, user_id: None)
+
+    _, item_gen = await router.stream_api_message(
+        user_id=uuid4(), user_content="Create a person", include_events=True
+    )
+    items = [item async for item in item_gen]
+
+    assert items == [
+        CompletionTextDelta("Created"),
+        CompletionEvent(event),
+        CompletionTextDelta(" person."),
+    ]
+    assert fake_manager.add_turn_calls == [
+        {"session_id": "new-session", "text": "Created person."}
+    ]
+
+
+@pytest.mark.asyncio
+async def test_route_api_completion_returns_events_without_persisting_them(monkeypatch):
+    event = Event(
+        id="event-1",
+        source="/linden/persons",
+        event_type="person.created",
+        time="2026-10-07T10:00:00Z",
+        tags=["origin:mcp"],
+        event_data={"resource": {"type": "person", "id": "person-1"}},
+    )
+
+    class _EventLLM:
+        async def run_with_events(self, *_args, **kwargs):
+            return CompletionResult(text="Created person.", events=(event,))
+
+    @contextmanager
+    def _fake_db_session():
+        yield object()
+
+    fake_manager = _FakeSessionManagerForApi
+    fake_manager.created_calls = []
+    fake_manager.add_turn_calls = []
+    router = routing.Router(llm=_EventLLM())
+    monkeypatch.setattr(routing, "session_scope", _fake_db_session)
+    monkeypatch.setattr(routing, "SessionManager", fake_manager)
+    monkeypatch.setattr(router, "_load_context_for_user", lambda db, user_id: None)
+
+    outbound, _, result = await router.route_api_completion(
+        user_id=uuid4(),
+        user_content="Create a person",
+        include_events=True,
+    )
+
+    assert outbound.text == "Created person."
+    assert result.events == (event,)
+    assert fake_manager.add_turn_calls == [
+        {"session_id": "new-session", "text": "Created person."}
+    ]

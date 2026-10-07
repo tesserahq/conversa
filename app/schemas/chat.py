@@ -5,7 +5,9 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+from tessera_sdk.clients.modela import ChatCompletionExtensions
+from tessera_sdk.mcp import CompletionInclude
 
 
 class ChatMessageInput(BaseModel):
@@ -23,6 +25,7 @@ class ChatCompletionCreate(BaseModel):
 
     messages: list[ChatMessageInput] = Field(min_length=1)
     stream: bool = False
+    include: list[CompletionInclude] | None = None
     session_id: UUID | None = None
     client_context: dict[str, Any] | None = Field(
         default=None,
@@ -33,6 +36,17 @@ class ChatCompletionCreate(BaseModel):
             "for access control decisions."
         ),
     )
+
+    @model_validator(mode="after")
+    def allow_application_event_channel_only(self):
+        unsupported = set(self.include or ()) - {CompletionInclude.EVENTS}
+        if unsupported:
+            raise ValueError("Conversa only supports include=['events']")
+        return self
+
+    @property
+    def wants_events(self) -> bool:
+        return CompletionInclude.EVENTS in (self.include or ())
 
 
 class ChatCompletionMessageOut(BaseModel):
@@ -52,3 +66,4 @@ class ChatCompletionResponseOut(BaseModel):
     created: int
     model: str
     choices: list[ChatCompletionChoiceOut]
+    extensions: ChatCompletionExtensions | None = None

@@ -1,20 +1,26 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any, AsyncIterator, Optional
+import asyncio
+from collections.abc import AsyncIterator
+from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID, uuid4
 
 from app.channels.envelope import InboundMessage, OutboundMessage
 from app.config import get_settings
-from app.infra.logging_config import get_logger
+from app.core.completion_output import (
+    CompletionResult,
+    CompletionStreamItem,
+    CompletionTextDelta,
+)
 from app.core.linker import Linker
+from app.db import session_scope
+from app.infra.logging_config import get_logger
 from app.repositories.context_snapshot_repository import ContextSnapshotRepository
 from app.repositories.session_manager import SessionManager
 from app.repositories.session_repository import SessionRepository
 from app.tasks.context_sync_task import sync_context_for_user_task
-from app.db import session_scope
 from app.workers.llm import LLMRunner, build_llm_runner_from_env
-import asyncio
 
 logger = get_logger("routing")
 
@@ -41,7 +47,7 @@ class Router:
     async def route_to_llm(
         self,
         msg: InboundMessage,
-        user_id: Optional[UUID],
+        user_id: UUID | None,
     ) -> OutboundMessage:
         linked_user = await asyncio.to_thread(
             self._linker.get_or_resolve_linked_user, msg.channel, msg.sender_id
@@ -91,8 +97,8 @@ class Router:
         self,
         user_id: UUID,
         user_content: str,
-        session_id: Optional[UUID] = None,
-    ) -> tuple[InboundMessage, UUID, list[dict], Optional[Any]]:
+        session_id: UUID | None = None,
+    ) -> tuple[InboundMessage, UUID, list[dict], Any | None]:
         """Resolve/create the session for a direct API message and load its
         history + context snapshot. Shared by the non-streaming and
         streaming API entry points below.
@@ -127,9 +133,9 @@ class Router:
         self,
         user_id: UUID,
         user_content: str,
-        session_id: Optional[UUID] = None,
+        session_id: UUID | None = None,
         project_id: str = "*",
-        client_context: Optional[dict[str, Any]] = None,
+        client_context: dict[str, Any] | None = None,
     ) -> tuple[OutboundMessage, UUID]:
         """Route a direct chat-API message for an already-authenticated user.
 
@@ -138,38 +144,71 @@ class Router:
         same SessionManager/LLMRunner plumbing as the channel path so
         session history and context-snapshot behavior stay identical.
         """
+        outbound, resolved_session_id, _ = await self.route_api_completion(
+            user_id=user_id,
+            user_content=user_content,
+            session_id=session_id,
+            project_id=project_id,
+            client_context=client_context,
+            include_events=False,
+        )
+        return outbound, resolved_session_id
+
+    async def route_api_completion(
+        self,
+        user_id: UUID,
+        user_content: str,
+        session_id: UUID | None = None,
+        project_id: str = "*",
+        client_context: dict[str, Any] | None = None,
+        *,
+        include_events: bool,
+    ) -> tuple[OutboundMessage, UUID, CompletionResult]:
+        """Complete an API turn and return response-only event metadata."""
         msg, resolved_session_id, history, context = await self._prepare_api_message(
             user_id, user_content, session_id
         )
-        reply_text = await self._llm.run(
-            msg,
-            history=history,
-            context=context,
-            user_id=user_id,
-            project_id=project_id,
-            client_context=client_context,
-        )
+        if include_events:
+            result = await self._llm.run_with_events(
+                msg,
+                history=history,
+                context=context,
+                user_id=user_id,
+                project_id=project_id,
+                client_context=client_context,
+            )
+        else:
+            text = await self._llm.run(
+                msg,
+                history=history,
+                context=context,
+                user_id=user_id,
+                project_id=project_id,
+                client_context=client_context,
+            )
+            result = CompletionResult(text=text)
         outbound = OutboundMessage(
             channel=API_CHANNEL,
             account_id=None,
             chat_id=msg.chat_id,
             thread_id=None,
-            text=reply_text,
+            text=result.text,
             reply_to=msg.message_id,
             media=[],
         )
         with session_scope() as db:
             SessionManager(db).add_turn(resolved_session_id, msg, outbound)
-        return outbound, resolved_session_id
+        return outbound, resolved_session_id, result
 
     async def stream_api_message(
         self,
         user_id: UUID,
         user_content: str,
-        session_id: Optional[UUID] = None,
+        session_id: UUID | None = None,
         project_id: str = "*",
-        client_context: Optional[dict[str, Any]] = None,
-    ) -> tuple[UUID, AsyncIterator[str]]:
+        client_context: dict[str, Any] | None = None,
+        include_events: bool = False,
+    ) -> tuple[UUID, AsyncIterator[CompletionStreamItem]]:
         """Like route_api_message, but streams the reply as text deltas.
 
         The session is resolved/created up front (so the caller has a
@@ -188,18 +227,20 @@ class Router:
 
         async def _produce() -> None:
             parts: list[str] = []
-            error: Optional[BaseException] = None
+            error: BaseException | None = None
             try:
-                async for delta in self._llm.stream(
+                async for item in self._llm.stream(
                     msg,
                     history=history,
                     context=context,
                     user_id=user_id,
                     project_id=project_id,
                     client_context=client_context,
+                    include_events=include_events,
                 ):
-                    parts.append(delta)
-                    await queue.put(("delta", delta))
+                    if isinstance(item, CompletionTextDelta):
+                        parts.append(item.text)
+                    await queue.put(("item", item))
             except Exception as exc:
                 error = exc
                 logger.exception(
@@ -225,10 +266,10 @@ class Router:
         self._background_tasks.add(task)
         task.add_done_callback(self._background_tasks.discard)
 
-        async def _consume() -> AsyncIterator[str]:
+        async def _consume() -> AsyncIterator[CompletionStreamItem]:
             while True:
                 kind, payload = await queue.get()
-                if kind == "delta":
+                if kind == "item":
                     yield payload
                 elif kind == "done":
                     return
@@ -260,11 +301,11 @@ class Router:
             message_id=str(uuid4()),
             text=text,
             media=[],
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             raw={},
         )
 
-    def _load_context_for_user(self, db: Any, user_id: Optional[UUID]) -> Optional[Any]:
+    def _load_context_for_user(self, db: Any, user_id: UUID | None) -> Any | None:
         """Load latest context snapshot for the user; trigger sync if missing."""
         if not user_id:
             logger.info("Skipping context load because user_id is missing")

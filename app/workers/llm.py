@@ -1,25 +1,36 @@
 from __future__ import annotations
 
 import json
-from typing import Any, AsyncIterator, List, Optional
+from collections.abc import AsyncIterator
+from typing import Any
 from uuid import UUID
 
 from tessera_sdk.clients.modela import CompletionMessage, ModelaClient
+from tessera_sdk.infra.events import Event
+from tessera_sdk.mcp import CompletionInclude, TruncationMarker
 
 from app.channels.envelope import InboundMessage
 from app.config import get_settings
 from app.constants.default_system_prompt import DefaultSystemPrompt
+from app.core.completion_output import (
+    CompletionEvent,
+    CompletionFailure,
+    CompletionResult,
+    CompletionStreamItem,
+    CompletionTextDelta,
+    CompletionTruncation,
+)
+from app.db import session_scope
 from app.infra.logging_config import get_logger
 from app.repositories.mcp_delegated_token_repository import MCPDelegatedTokenRepository
 from app.repositories.system_prompt_repository import SystemPromptRepository
-from app.db import session_scope
 
 logger = get_logger()
 
 SYSTEM_PROMPT_NAME = "default"
 
 
-def _summarize_context(context: Optional[dict[str, Any]]) -> dict[str, Any]:
+def _summarize_context(context: dict[str, Any] | None) -> dict[str, Any]:
     if not isinstance(context, dict):
         return {"present": False, "keys": [], "section_sizes": {}}
 
@@ -69,11 +80,11 @@ def _format_client_context_for_prompt(client_context: dict[str, Any]) -> str:
 
 def _build_completion_messages(
     system_prompt: str,
-    history: List[dict[str, str]],
+    history: list[dict[str, str]],
     user_content: str,
-    context: Optional[dict[str, Any]] = None,
-    client_context: Optional[dict[str, Any]] = None,
-) -> List[CompletionMessage]:
+    context: dict[str, Any] | None = None,
+    client_context: dict[str, Any] | None = None,
+) -> list[CompletionMessage]:
     """Build Modela messages: system prompt, history, then current user turn."""
     full_prompt = system_prompt
     if context:
@@ -85,7 +96,7 @@ def _build_completion_messages(
         if client_ctx_block:
             full_prompt = full_prompt.rstrip() + client_ctx_block
 
-    messages: List[CompletionMessage] = [
+    messages: list[CompletionMessage] = [
         CompletionMessage(role="system", content=full_prompt)
     ]
     for item in history:
@@ -112,12 +123,12 @@ class LLMRunner:
 
     def __init__(
         self,
-        system_prompt: Optional[str] = None,
+        system_prompt: str | None = None,
         *,
         modela_audience: str,
         modela_scopes: str,
-        token_repo: Optional[MCPDelegatedTokenRepository] = None,
-        modela_base_url: Optional[str] = None,
+        token_repo: MCPDelegatedTokenRepository | None = None,
+        modela_base_url: str | None = None,
     ) -> None:
         logger.info("Initializing LLM runner")
         self._system_prompt = system_prompt or ""
@@ -129,14 +140,15 @@ class LLMRunner:
     async def stream(
         self,
         msg: InboundMessage,
-        history: Optional[List[dict[str, str]]] = None,
-        context: Optional[dict[str, Any]] = None,
+        history: list[dict[str, str]] | None = None,
+        context: dict[str, Any] | None = None,
         *,
-        user_id: Optional[UUID] = None,
+        user_id: UUID | None = None,
         project_id: str = "*",
-        client_context: Optional[dict[str, Any]] = None,
-    ) -> AsyncIterator[str]:
-        """Stream the assistant's reply as text deltas.
+        client_context: dict[str, Any] | None = None,
+        include_events: bool = False,
+    ) -> AsyncIterator[CompletionStreamItem]:
+        """Stream typed text and optional event-channel output from Modela.
 
         Raises ValueError if Modela's stream produces no chunks at all
         (the streaming analogue of a non-streaming response with no choices).
@@ -178,16 +190,28 @@ class LLMRunner:
 
         chunk_count = 0
         reply_length = 0
-        async for chunk in client.stream_complete(
-            messages=messages, project_id=project_id
-        ):
+        stream_kwargs: dict[str, Any] = {
+            "messages": messages,
+            "project_id": project_id,
+        }
+        if include_events:
+            stream_kwargs["include"] = [CompletionInclude.EVENTS]
+
+        async for chunk in client.stream_complete(**stream_kwargs):
             chunk_count += 1
+            extensions = chunk.extensions
+            if include_events and extensions is not None:
+                if extensions.event is not None:
+                    yield CompletionEvent(extensions.event)
+                marker = extensions.truncation
+                if marker is not None and marker.channel is CompletionInclude.EVENTS:
+                    yield CompletionTruncation(marker)
             if not chunk.choices:
                 continue
             delta = chunk.choices[0].delta.content
             if delta:
                 reply_length += len(delta)
-                yield delta
+                yield CompletionTextDelta(delta)
 
         logger.info(
             "Finished Modela stream user_id=%s chunks=%d reply_text_length=%d",
@@ -201,16 +225,16 @@ class LLMRunner:
     async def run(
         self,
         msg: InboundMessage,
-        history: Optional[List[dict[str, str]]] = None,
-        context: Optional[dict[str, Any]] = None,
+        history: list[dict[str, str]] | None = None,
+        context: dict[str, Any] | None = None,
         *,
-        user_id: Optional[UUID] = None,
+        user_id: UUID | None = None,
         project_id: str = "*",
-        client_context: Optional[dict[str, Any]] = None,
+        client_context: dict[str, Any] | None = None,
     ) -> str:
         """Non-streaming convenience wrapper: joins the full streamed reply."""
-        parts: List[str] = []
-        async for delta in self.stream(
+        parts: list[str] = []
+        async for item in self.stream(
             msg,
             history=history,
             context=context,
@@ -218,8 +242,81 @@ class LLMRunner:
             project_id=project_id,
             client_context=client_context,
         ):
-            parts.append(delta)
+            if isinstance(item, CompletionTextDelta):
+                parts.append(item.text)
         return "".join(parts)
+
+    async def run_with_events(
+        self,
+        msg: InboundMessage,
+        history: list[dict[str, str]] | None = None,
+        context: dict[str, Any] | None = None,
+        *,
+        user_id: UUID | None = None,
+        project_id: str = "*",
+        client_context: dict[str, Any] | None = None,
+    ) -> CompletionResult:
+        """Collect one API completion without persisting response metadata."""
+        text_parts: list[str] = []
+        events: list[Event] = []
+        truncations: list[TruncationMarker] = []
+        try:
+            async for item in self.stream(
+                msg,
+                history=history,
+                context=context,
+                user_id=user_id,
+                project_id=project_id,
+                client_context=client_context,
+                include_events=True,
+            ):
+                if isinstance(item, CompletionTextDelta):
+                    text_parts.append(item.text)
+                elif isinstance(item, CompletionEvent):
+                    events.append(item.event)
+                elif isinstance(item, CompletionTruncation):
+                    truncations.append(item.marker)
+        except Exception as error:
+            raise CompletionFailure(
+                error,
+                events=_merge_events(events, getattr(error, "events", ())),
+                truncations=_merge_truncations(
+                    truncations, getattr(error, "truncations", ())
+                ),
+            ) from error
+        return CompletionResult(
+            text="".join(text_parts),
+            events=tuple(events),
+            truncations=tuple(truncations),
+        )
+
+
+def _merge_events(*groups) -> tuple[Event, ...]:
+    """Preserve order while deduplicating inline and error-body delivery."""
+    merged: list[Event] = []
+    seen: set[tuple[str, str]] = set()
+    for group in groups:
+        for event in group:
+            if not isinstance(event, Event):
+                continue
+            identity = (event.source, event.id)
+            if identity not in seen:
+                seen.add(identity)
+                merged.append(event)
+    return tuple(merged)
+
+
+def _merge_truncations(*groups) -> tuple[TruncationMarker, ...]:
+    """Keep one marker per channel, preferring the largest final drop count."""
+    by_channel: dict[CompletionInclude, TruncationMarker] = {}
+    for group in groups:
+        for marker in group:
+            if not isinstance(marker, TruncationMarker):
+                continue
+            current = by_channel.get(marker.channel)
+            if current is None or marker.dropped_count > current.dropped_count:
+                by_channel[marker.channel] = marker
+    return tuple(by_channel.values())
 
 
 def build_llm_runner_from_env() -> LLMRunner:
