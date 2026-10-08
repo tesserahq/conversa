@@ -23,7 +23,7 @@ nats_worker = "run_nats_worker:main"
 
 [tool.poetry.dependencies]
 python = ">=3.11,<3.14"
-fastapi = "v0.141.1"
+fastapi = "v0.143.0"
 python-dotenv = "^1.2.3"
 sqlalchemy = "^2.0.54"
 asyncpg = "^0.31.0"
