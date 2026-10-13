@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to coding agents working with code in this repository.
 
 ## What is Conversa
 
@@ -101,3 +101,10 @@ GitHub Actions runs on push/PR to `main`:
 3. `pytest` full suite
 
 Docker image built and pushed to Docker Hub on successful main builds.
+
+## Database migrations
+
+- Migrations run only in the API's `start.sh`. During a deploy, old and new containers overlap (the API rolls; workers deploy separately), so every migration must work with the previous release's code.
+- One release: additive changes (nullable column or one with a server default, table, index).
+- Two releases: dropping or renaming a column or table, adding `NOT NULL`, or changing a type. Release 1 stops reading and writing it; a later release runs the migration.
+- See [Database migrations](https://github.com/mylinden-tech/infra/blob/main/docs/linden-continuous-delivery.md#database-migrations) and mylinden-tech/infra#260.
