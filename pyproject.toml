@@ -59,7 +59,7 @@ fastapi-pagination = "^0.16.0"
 # tessera-sdk = { path = "../tessera-sdk-py/", develop = true }
 tessera-sdk = { git = "https://github.com/tesserahq/tessera-sdk-py.git", branch = "main" }
 apscheduler = "<4"
-pytz = "^2025.2"
+pytz = "^2026.6"
 mako = "^1.4.3"
 faststream = {extras = ["nats"], version = "^0.7.8"}
 python-telegram-bot = "22.8"
