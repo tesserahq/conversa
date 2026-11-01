@@ -39,11 +39,14 @@ def sync_context_all_due_task(limit: int = 500) -> int:
     Enumerate (source, user) pairs due for sync and enqueue per-user tasks.
     One task per user (debounced).
     """
+    # Read ids inside the session: the managed session commits on exit, which
+    # expires the loaded User rows, and reading them afterwards raises
+    # DetachedInstanceError.
     with session_scope() as db:
         state_svc = ContextSourceStateRepository(db)
         pairs = state_svc.get_due_user_source_pairs(limit=limit)
+        user_ids = {str(u.id) for _, u in pairs}
 
-    user_ids = {str(u.id) for _, u in pairs}
     for uid in user_ids:
         sync_context_for_user_task.delay(uid)
 
