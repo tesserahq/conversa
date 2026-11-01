@@ -19,6 +19,7 @@ from app.infra.logging_config import get_logger
 from app.repositories.context_snapshot_repository import ContextSnapshotRepository
 from app.repositories.session_manager import SessionManager
 from app.repositories.session_repository import SessionRepository
+from app.services.user_provisioner import UnknownUserError, UserProvisioner
 from app.tasks.context_sync_task import sync_context_for_user_task
 from app.workers.llm import LLMRunner, build_llm_runner_from_env
 
@@ -36,9 +37,14 @@ API_CHANNEL = "api"
 class Router:
     """Deterministic routing: replies go back to the same channel/chat/thread."""
 
-    def __init__(self, llm: LLMRunner | None = None) -> None:
+    def __init__(
+        self,
+        llm: LLMRunner | None = None,
+        users: UserProvisioner | None = None,
+    ) -> None:
         self._llm = llm or build_llm_runner_from_env()
-        self._linker = Linker()
+        self._users = users or UserProvisioner()
+        self._linker = Linker(users=self._users)
         # Strong references to in-flight streaming background tasks, so they
         # aren't garbage-collected mid-run (asyncio only weakly tracks tasks
         # otherwise). See stream_api_message.
@@ -103,6 +109,9 @@ class Router:
         history + context snapshot. Shared by the non-streaming and
         streaming API entry points below.
         """
+        if await asyncio.to_thread(self._users.ensure_user, user_id) is None:
+            raise UnknownUserError(user_id)
+
         with session_scope() as db:
             session_manager = SessionManager(db)
             session = None

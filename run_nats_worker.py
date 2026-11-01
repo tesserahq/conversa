@@ -1,6 +1,7 @@
 import asyncio
 import sys
 from app.config import get_settings
+from app.core.identies_events import identies_event_names
 from app.infra.logging_config import LoggingConfig, get_logger
 from app.tasks.process_nats_event_task import process_nats_event_task
 from faststream import FastStream
@@ -50,7 +51,7 @@ async def _run_async() -> None:
     subscriber_kwargs = {"queue": settings.nats_queue} if settings.nats_queue else {}
 
     @broker.subscriber(
-        "com.identies.>",
+        identies_event_names().subscription,
         stream=js_stream,  # THIS makes it JetStream
         durable=settings.nats_queue,  # durable consumer name
         deliver_policy=DeliverPolicy.LAST,  # or DeliverPolicy.LAST, etc.

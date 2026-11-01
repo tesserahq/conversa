@@ -6,28 +6,19 @@ from datetime import datetime, timezone
 from typing import List, Optional, Tuple
 from uuid import UUID
 
-from sqlalchemy import nulls_last
+from sqlalchemy import and_, nulls_last, or_, select, true
 from sqlalchemy.orm import Query, Session, joinedload
 
 from app.models.context_source import ContextSource
 from app.models.context_source import ContextSourceState
 from app.models.user import User
-from app.repositories.context_source_repository import ContextSourceRepository
-from app.repositories.user_repository import UserRepository
 
 
 class ContextSourceStateRepository:
     """Manages per-source, per-user sync state for context pack sync."""
 
-    def __init__(
-        self,
-        db: Session,
-        context_source_repository: Optional[ContextSourceRepository] = None,
-        user_repository: Optional[UserRepository] = None,
-    ) -> None:
+    def __init__(self, db: Session) -> None:
         self._db = db
-        self._source_svc = context_source_repository or ContextSourceRepository(db)
-        self._user_svc = user_repository or UserRepository(db)
 
     def get_or_create_state(
         self,
@@ -111,39 +102,25 @@ class ContextSourceStateRepository:
         Returns enabled sources x users (from users table, non-deleted),
         where next_run_at <= now or no state exists.
         """
-        now = datetime.now(timezone.utc)
-        sources = [
-            s
-            for s in self._source_svc.get_context_sources(skip=0, limit=200)
-            if s.enabled and s.deleted_at is None
-        ]
-        users = self._user_svc.get_users(skip=0, limit=1000)
-
-        result: List[Tuple[ContextSource, User]] = []
-        seen: set[Tuple[UUID, UUID]] = set()
-
-        for source in sources:
-            for user in users:
-                if (source.id, user.id) in seen:
-                    continue
-                state = (
-                    self._db.query(ContextSourceState)
-                    .filter(
-                        ContextSourceState.source_id == source.id,
-                        ContextSourceState.user_id == user.id,
-                    )
-                    .first()
-                )
-                if state is None:
-                    due = True
-                else:
-                    next_run = state.next_run_at
-                    if next_run is not None and next_run.tzinfo is None:
-                        next_run = next_run.replace(tzinfo=timezone.utc)
-                    due = next_run is not None and next_run <= now
-                if due:
-                    result.append((source, user))
-                    seen.add((source.id, user.id))
-                    if len(result) >= limit:
-                        return result
-        return result
+        # Timestamps are stored as naive UTC, so compare against naive UTC.
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        state_of_pair = and_(
+            ContextSourceState.source_id == ContextSource.id,
+            ContextSourceState.user_id == User.id,
+        )
+        statement = (
+            select(ContextSource, User)
+            .join(User, true())
+            .outerjoin(ContextSourceState, state_of_pair)
+            .where(
+                ContextSource.enabled.is_(True),
+                ContextSource.deleted_at.is_(None),
+                or_(
+                    ContextSourceState.id.is_(None),
+                    ContextSourceState.next_run_at <= now,
+                ),
+            )
+            .order_by(ContextSource.source_id, User.id)
+            .limit(limit)
+        )
+        return [(source, user) for source, user in self._db.execute(statement).all()]

@@ -43,7 +43,15 @@ celery_app.conf.beat_schedule = {
 
 celery_app.autodiscover_tasks(["app.tasks"])  # ensure tasks are registered explicitly
 
-from celery.signals import worker_process_init  # noqa: E402
+from celery.signals import task_failure, worker_process_init  # noqa: E402
+
+from app.infra.error_reporting import (  # noqa: E402
+    init_rollbar_for_worker,
+    report_task_failure,
+)
+
+worker_process_init.connect(init_rollbar_for_worker)
+task_failure.connect(report_task_failure)
 
 
 @worker_process_init.connect

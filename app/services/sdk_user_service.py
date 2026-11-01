@@ -14,5 +14,5 @@ create_sdk_user_service = create_managed_user_service_factory(
     get_user=lambda db, user_id: UserRepository(db).get_user_by_id_or_external_id(
         user_id
     ),
-    onboard_user=lambda db, user_data: UserRepository(db).onboard_user(user_data),
+    onboard_user=lambda db, user_data: UserRepository(db).upsert_user(user_data),
 )

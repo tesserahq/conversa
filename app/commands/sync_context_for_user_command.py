@@ -44,9 +44,7 @@ class SyncContextForUserCommand:
                   sources failed (e.g. HTTP 401)
         """
         source_svc = ContextSourceRepository(self.db)
-        state_svc = ContextSourceStateRepository(
-            self.db, context_source_repository=source_svc
-        )
+        state_svc = ContextSourceStateRepository(self.db)
         fetcher = ContextPackFetcher(CredentialApplier(self.db))
         merge_svc = ContextMergeRepository()
         snapshot_svc = ContextSnapshotRepository(self.db)

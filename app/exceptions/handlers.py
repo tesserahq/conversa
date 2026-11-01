@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from app.config import get_settings
 from app.core.completion_output import CompletionFailure
 from app.exceptions.resource_not_found_error import ResourceNotFoundError
+from app.services.user_provisioner import UnknownUserError
 
 
 def register_exception_handlers(app: FastAPI) -> None:
@@ -43,6 +44,13 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def resource_not_found_handler(request: Request, exc: ResourceNotFoundError):
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": str(exc)},
+        )
+
+    @app.exception_handler(UnknownUserError)
+    async def unknown_user_handler(request: Request, exc: UnknownUserError):
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
             content={"detail": str(exc)},
         )
 

@@ -48,9 +48,19 @@ class UserRepository(SoftDeleteRepository[User]):
         self.db.refresh(db_user)
         return db_user
 
-    def onboard_user(self, user: UserOnboard) -> User:
-        db_user = User(**user.model_dump())
-        self.db.add(db_user)
+    def upsert_user(self, user: UserOnboard) -> User:
+        """Create the user, or refresh the existing row with the same id.
+
+        Idempotent, so a redelivered event or a repeated onboarding never fails
+        on the primary key. A soft-deleted row is refreshed but not revived.
+        """
+        db_user = self.get_user_any_status(user.id) if user.id else None
+        if db_user is None:
+            db_user = User(**user.model_dump())
+            self.db.add(db_user)
+        else:
+            for field, value in user.model_dump(exclude={"id"}).items():
+                setattr(db_user, field, value)
         self.db.flush()
         self.db.refresh(db_user)
         return db_user

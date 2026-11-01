@@ -20,6 +20,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from app.telemetry import setup_tracing, _patch_fastapi_route_details
 from app.exceptions.handlers import register_exception_handlers
+from app.infra.error_reporting import init_rollbar
 from app.infra.logging_config import get_logger
 from app.db import db_manager
 from tessera_sdk.server.health import get_livez_readyz_router
@@ -113,7 +114,7 @@ def create_app(testing: bool = False, auth_middleware=None) -> FastAPI:
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     if settings.is_production:
         # Initialize Rollbar SDK with your server-side access token
-        rollbar.init(settings.rollbar_access_token, environment=settings.environment)
+        init_rollbar()
 
         # Report ERROR and above to Rollbar
         rollbar_handler = RollbarHandler()

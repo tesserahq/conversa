@@ -43,6 +43,11 @@ class Settings(BaseSettings):
         default=None,
         json_schema_extra={"env": "IDENTIES_HOST"},
     )
+    # Must match Identies' EVENT_TYPE_PREFIX; production publishes com.identies.*.
+    identies_event_prefix: str = Field(
+        default="com.identies",
+        json_schema_extra={"env": "IDENTIES_EVENT_PREFIX"},
+    )
     link_url: str = Field(
         default="https://app.mylinden.family/link/{channel}/{link_token}",
         json_schema_extra={"env": "LINK_URL"},

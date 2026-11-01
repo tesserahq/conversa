@@ -18,6 +18,20 @@ from app.core.completion_output import (
 )
 
 
+class _KnownUsers:
+    """Stands in for UserProvisioner: every user exists. The real one calls Identies."""
+
+    def ensure_user(self, user_id):
+        return SimpleNamespace(id=user_id)
+
+
+@pytest.fixture(autouse=True)
+def known_users(monkeypatch):
+    monkeypatch.setattr(
+        routing, "UserProvisioner", lambda *args, **kwargs: _KnownUsers()
+    )
+
+
 def _inbound_message() -> InboundMessage:
     return InboundMessage(
         channel="telegram",
@@ -456,3 +470,17 @@ async def test_route_api_completion_returns_events_without_persisting_them(monke
     assert fake_manager.add_turn_calls == [
         {"session_id": "new-session", "text": "Created person."}
     ]
+
+
+@pytest.mark.asyncio
+async def test_route_api_message_rejects_user_unknown_to_conversa_and_identies(
+    monkeypatch,
+):
+    class _UnknownUsers:
+        def ensure_user(self, user_id):
+            return None
+
+    router = routing.Router(llm=_FakeLLMEcho(), users=_UnknownUsers())
+
+    with pytest.raises(routing.UnknownUserError):
+        await router.route_api_message(user_id=uuid4(), user_content="Hi")
