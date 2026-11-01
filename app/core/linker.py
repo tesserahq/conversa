@@ -1,21 +1,19 @@
-from tessera_sdk.clients.identies import IdentiesClient
 from tessera_sdk.clients.identies.schemas.external_account_response import CheckResponse
 from tessera_sdk.clients.identies.schemas.user_response import UserResponse
-from tessera_sdk.infra import AuthTokenProvider
 from tessera_sdk.infra.cache import Cache
+
+from app.core.identies_client import build_identies_client
 from app.schemas.user import User
-from app.repositories.user_repository import UserRepository
-from app.db import session_scope
-from uuid import UUID
-from app.schemas.user import UserOnboard
+from app.services.user_provisioner import UserProvisioner
 
 LINKED_CACHE_TTL = 86400  # 24 hours
 LINKED_CACHE_NAMESPACE = "identies_linked"
 
 
 class Linker:
-    def __init__(self) -> None:
+    def __init__(self, users: UserProvisioner | None = None) -> None:
         self._linked_cache: Cache = Cache(namespace=LINKED_CACHE_NAMESPACE)
+        self._users = users or UserProvisioner()
 
     def is_account_linked(self, channel: str, external_id: str) -> bool:
         """
@@ -25,7 +23,7 @@ class Linker:
         return self.get_or_resolve_linked_user(channel, external_id) is not None
 
     def generate_link_token(self, channel: str, external_id: str) -> str:
-        identies_client = self._get_identies_client()
+        identies_client = build_identies_client()
         link_response = identies_client.create_link_token(
             platform=channel,
             external_user_id=external_id,
@@ -47,67 +45,19 @@ class Linker:
         if linked_response.linked is False:
             return None
 
-        # Ensure user exists in Conversa DB and refresh Redis cache.
-        self._fetch_user(linked_response.user.id)
+        # Registers the user locally if needed, then refreshes the Redis cache.
+        if self._users.ensure_user(linked_response.user.id) is None:
+            return None
         self._write_cache(channel, external_id, linked_response.user)
         return self._read_cache(channel, external_id)
 
     def _check_identies(self, channel: str, external_id: str) -> CheckResponse:
-        identies_client = self._get_identies_client()
+        identies_client = build_identies_client()
         check_response = identies_client.check_external_account(
             platform=channel,
             external_id=external_id,
         )
         return check_response
-
-    def _fetch_user(
-        self,
-        user_id: UUID,
-    ) -> User:
-        """
-        Fetch a user from Identies.
-
-        Args:
-            user_id: The ID of the user
-
-        Returns:
-            User: The user
-        """
-        with session_scope() as db:
-            user_service = UserRepository(db=db)
-            # If the user doesn't exist, we need to fetch it from Identies
-            user = user_service.get_user(user_id)
-            if user:
-                return user
-
-        identies_client = self._get_identies_client()
-
-        identies_user = identies_client.get_internal_user(user_id)
-
-        user = UserOnboard(
-            id=identies_user.id,
-            email=identies_user.email,
-            service_account=identies_user.service_account,
-            preferred_name=identies_user.preferred_name,
-            first_name=identies_user.first_name,
-            last_name=identies_user.last_name,
-            avatar_url=identies_user.avatar_url,
-            provider=identies_user.provider,
-            verified=identies_user.verified,
-            verified_at=identies_user.verified_at,
-            confirmed_at=identies_user.confirmed_at,
-            external_id=identies_user.external_id,
-        )
-
-        return user_service.onboard_user(user)
-
-    def _get_auth_token(self) -> str:
-        """Get an auth token (IDENTIES_API_KEY first, Auth0 M2M fallback)."""
-        return AuthTokenProvider().get_token()
-
-    def _get_identies_client(self) -> IdentiesClient:
-        """Build an Identies client with the resolved auth token."""
-        return IdentiesClient(api_token=self._get_auth_token())
 
     def _linked_cache_key(self, channel: str, external_id: str) -> str:
         """Build cache key for linked external account."""

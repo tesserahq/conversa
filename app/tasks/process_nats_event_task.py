@@ -19,10 +19,13 @@ from telegram import Bot
 from app.schemas.session import MessageCreate
 from app.repositories.session_message_repository import SessionMessageRepository
 from app.repositories.session_repository import SessionRepository
+from app.core.identies_events import identies_event_names
+from app.services.identies_user_events import IdentiesUserEventHandler
+from app.services.user_provisioner import UserProvisioner
+from app.tasks.context_sync_task import sync_context_for_user_task
 
 logger = get_logger("nats_event_task")
 
-LINKED_EVENT_TYPE = "com.identies.external_account.linked"
 TELEGRAM_CHANNEL = "telegram"
 TELEGRAM_LINKED_MESSAGE = "Your account has been linked to your Telegram account!"
 
@@ -139,7 +142,14 @@ def process_nats_event_task(msg: Dict) -> Optional[str]:
         logger.warning("Invalid NATS event payload: %s", e)
         return None
 
-    if event.event_type == LINKED_EVENT_TYPE:
+    event_names = identies_event_names()
+    if event.event_type == event_names.external_account_linked:
         _handle_external_account_linked_event(event)
+
+    user_events = IdentiesUserEventHandler(
+        UserProvisioner(), sync_context_for_user_task.delay, event_names
+    )
+    if user_events.handles(event.event_type):
+        user_events.handle(event)
 
     return event.id

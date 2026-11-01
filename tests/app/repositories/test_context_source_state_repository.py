@@ -2,6 +2,8 @@
 
 from datetime import datetime, timedelta, timezone
 
+from app.models.context_source import ContextSource
+from app.models.user import User
 from app.repositories.context_source_state_repository import (
     ContextSourceStateRepository,
 )
@@ -196,3 +198,63 @@ def test_get_states_query_orders_by_last_attempt_at_desc_nulls_last(
 
     results = svc.get_states_query(setup_context_source.id).all()
     assert results[0].id == with_attempt.id
+
+
+def test_due_pairs_are_not_capped_at_1000_users(db, setup_context_source):
+    """Every due user is returned, not only the first 1000 in the users table."""
+    db.add_all(
+        [
+            User(
+                email=f"bulk-user-{i}@example.test",
+                first_name="Bulk",
+                last_name="User",
+                provider="google",
+                external_id=f"bulk-user-{i}",
+            )
+            for i in range(1005)
+        ]
+    )
+    db.flush()
+
+    pairs = ContextSourceStateRepository(db).get_due_user_source_pairs(limit=5000)
+
+    users_for_source = {u.id for s, u in pairs if s.id == setup_context_source.id}
+    assert len(users_for_source) >= 1005
+
+
+def test_due_pairs_are_not_capped_at_200_sources(db, setup_user, faker):
+    """Every enabled source is considered, not only the first 200 in the table."""
+    db.add_all(
+        [
+            ContextSource(
+                source_id=f"bulk-source-{i}",
+                display_name=faker.company(),
+                base_url="https://api.example.com",
+                credential_id=None,
+                capabilities={"supports_etag": True, "supports_since_cursor": False},
+                poll_interval_seconds=3600,
+                enabled=True,
+            )
+            for i in range(205)
+        ]
+    )
+    db.flush()
+
+    pairs = ContextSourceStateRepository(db).get_due_user_source_pairs(limit=5000)
+
+    sources_for_user = {s.id for s, u in pairs if u.id == setup_user.id}
+    assert len(sources_for_user) >= 205
+
+
+def test_due_pairs_skip_pairs_whose_next_run_at_is_unset(
+    db, setup_context_source, setup_user
+):
+    """A state row with no next_run_at is not due, matching the previous behaviour."""
+    svc = ContextSourceStateRepository(db)
+    svc.get_or_create_state(setup_context_source.id, setup_user.id)
+
+    pairs = svc.get_due_user_source_pairs(limit=500)
+
+    assert (setup_context_source.id, setup_user.id) not in [
+        (s.id, u.id) for s, u in pairs
+    ]

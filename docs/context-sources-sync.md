@@ -61,7 +61,7 @@ sequenceDiagram
 ### Step by step
 
 1. **Celery Beat** fires `sync_context_all_due_task` on a fixed interval (`CONTEXT_SYNC_INTERVAL_SECONDS`, default `600` seconds — see `app/infra/celery_app.py`).
-2. That task calls `ContextSourceStateRepository.get_due_user_source_pairs()`, which enumerates every `(enabled source) × (user)` pair where `next_run_at <= now`, **or** no state row exists yet (so a brand-new source/user pair is always due immediately). It scans up to 200 sources × 1000 users and returns at most 500 pairs.
+2. That task calls `ContextSourceStateRepository.get_due_user_source_pairs()`, which enumerates every `(enabled source) × (user)` pair where `next_run_at <= now`, **or** no state row exists yet (so a brand-new source/user pair is always due immediately). It is one SQL query over enabled sources and users, with no cap on either, and returns at most `limit` (500) pairs.
 3. Pairs are deduped down to unique `user_id`s and **one task is enqueued per user**, not per source — `sync_context_for_user_task.delay(user_id)`. If a user has three due sources, they still get a single sync task that handles all of them.
 4. `sync_context_for_user_task` runs `SyncContextForUserCommand.execute(user_id)`:
    - Loads all currently **enabled** `ContextSource`s (re-checked at execution time, not from the due-pairs snapshot).
@@ -106,7 +106,7 @@ So the first-ever message from a new user has no context (a sync is queued in th
 - **Conditional fetch** — ETag support (`If-None-Match`) avoids re-fetching/re-merging unchanged data.
 - **Snapshots are a log, not a mutable row** — every successful sync inserts a new `context_snapshots` row; chat always reads the most recent one.
 - **Error backoff** — a fetch error retries in 2 minutes regardless of the source's normal poll interval; a clean 304 or 200 uses the source's configured `poll_interval_seconds`.
-- **Scaling caveat** — `get_due_user_source_pairs()` currently loads sources and users into Python and double-loops over them rather than filtering at the query level. Fine at current scale (200 sources / 1000 users), but would need to move to a SQL join/filter as either grows.
+- **Scaling** — `get_due_user_source_pairs()` is a single SQL query (enabled sources cross-joined with users, outer-joined to `context_source_state`), so no source or user count is silently dropped. The previous version capped at 200 sources and 1000 users and loaded everything into Python. That was not a live problem at the time (about 20 users), but users beyond the cap would have been skipped with no error.
 
 ## Related code
 
