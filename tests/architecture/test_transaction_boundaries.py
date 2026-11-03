@@ -2,9 +2,13 @@
 tessera_sdk.testing.transaction_guards (see docs/managed-transactions.md in
 tessera-sdk-py).
 
-Every rule is fully enforced: there is no baseline file, so any violation
-fails. The only exceptions are the reasoned early commits in
-``early_commit_allowlist``.
+Every transaction rule is fully enforced, so any violation fails. The only
+exceptions are the reasoned early commits in ``early_commit_allowlist``.
+
+``async_database_access`` (synchronous database access inside ``async def``,
+linden-api SDD 0012) starts from the violations listed in
+``transaction_baseline.json``; each fix removes its entry. Regenerate it with
+``UPDATE_TRANSACTION_BASELINE=1 pytest tests/architecture``.
 """
 
 from pathlib import Path
@@ -12,6 +16,7 @@ from pathlib import Path
 import pytest
 from tessera_sdk.testing.transaction_guards import (
     DEFAULT_TRANSACTION_DIRS,
+    EVENT_LOOP_RULE_NAMES,
     RULE_NAMES,
     TransactionGuardConfig,
     assert_matches_baseline,
@@ -45,4 +50,11 @@ CONFIG = TransactionGuardConfig(
 
 @pytest.mark.parametrize("rule", RULE_NAMES)
 def test_transaction_rule_matches_baseline(rule):
+    assert_matches_baseline(CONFIG, rule)
+
+
+@pytest.mark.parametrize("rule", EVENT_LOOP_RULE_NAMES)
+def test_event_loop_rule_matches_baseline(rule):
+    """Synchronous database access in ``async def`` blocks the event loop
+    (linden-api SDD 0012)."""
     assert_matches_baseline(CONFIG, rule)
