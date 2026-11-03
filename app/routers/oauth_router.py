@@ -8,7 +8,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
-from slack_sdk.web.async_client import AsyncWebClient
+from slack_sdk import WebClient
 from sqlalchemy.orm import Session
 
 from app.commands.install_channel_command import InstallChannelCommand
@@ -55,7 +55,7 @@ async def slack_install(
 
 
 @router.get("/slack/callback")
-async def slack_callback(
+def slack_callback(
     db: DbSession, code: str = Query(...), state: str = Query(...)
 ) -> RedirectResponse:
     """Handle Slack OAuth callback: exchange code, store installation, fire event."""
@@ -67,9 +67,9 @@ async def slack_callback(
     if not tessera_user_id:
         raise HTTPException(status_code=400, detail="Invalid OAuth state parameter")
 
-    client = AsyncWebClient()
+    client = WebClient()
     try:
-        response = await client.oauth_v2_access(
+        response = client.oauth_v2_access(
             client_id=settings.slack_client_id,
             client_secret=settings.slack_client_secret,
             code=code,

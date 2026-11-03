@@ -30,8 +30,7 @@ def _fake_settings(limit):
     return SimpleNamespace(conversa_rate_limit_per_user_per_minute=limit)
 
 
-@pytest.mark.asyncio
-async def test_no_op_when_limit_unset(monkeypatch):
+def test_no_op_when_limit_unset(monkeypatch):
     monkeypatch.setattr(rate_limit, "get_settings", lambda: _fake_settings(None))
     fake_redis = _FakeRedisClient()
     monkeypatch.setattr(
@@ -41,13 +40,12 @@ async def test_no_op_when_limit_unset(monkeypatch):
     )
 
     dependency = rate_limit.enforce_user_rate_limit("chat")
-    await dependency(current_user=SimpleNamespace(id=uuid4()))
+    dependency(current_user=SimpleNamespace(id=uuid4()))
 
     assert fake_redis.counts == {}
 
 
-@pytest.mark.asyncio
-async def test_allows_requests_under_the_limit(monkeypatch):
+def test_allows_requests_under_the_limit(monkeypatch):
     monkeypatch.setattr(rate_limit, "get_settings", lambda: _fake_settings(5))
     fake_redis = _FakeRedisClient()
     monkeypatch.setattr(
@@ -60,11 +58,10 @@ async def test_allows_requests_under_the_limit(monkeypatch):
     user = SimpleNamespace(id=uuid4())
 
     for _ in range(5):
-        await dependency(current_user=user)  # should not raise
+        dependency(current_user=user)  # should not raise
 
 
-@pytest.mark.asyncio
-async def test_rejects_requests_over_the_limit(monkeypatch):
+def test_rejects_requests_over_the_limit(monkeypatch):
     monkeypatch.setattr(rate_limit, "get_settings", lambda: _fake_settings(2))
     fake_redis = _FakeRedisClient()
     monkeypatch.setattr(
@@ -76,16 +73,15 @@ async def test_rejects_requests_over_the_limit(monkeypatch):
     dependency = rate_limit.enforce_user_rate_limit("chat")
     user = SimpleNamespace(id=uuid4())
 
-    await dependency(current_user=user)
-    await dependency(current_user=user)
+    dependency(current_user=user)
+    dependency(current_user=user)
     with pytest.raises(HTTPException) as exc_info:
-        await dependency(current_user=user)
+        dependency(current_user=user)
 
     assert exc_info.value.status_code == 429
 
 
-@pytest.mark.asyncio
-async def test_limits_are_scoped_per_user(monkeypatch):
+def test_limits_are_scoped_per_user(monkeypatch):
     monkeypatch.setattr(rate_limit, "get_settings", lambda: _fake_settings(1))
     fake_redis = _FakeRedisClient()
     monkeypatch.setattr(
@@ -98,12 +94,11 @@ async def test_limits_are_scoped_per_user(monkeypatch):
     user_a = SimpleNamespace(id=uuid4())
     user_b = SimpleNamespace(id=uuid4())
 
-    await dependency(current_user=user_a)  # user_a at their limit
-    await dependency(current_user=user_b)  # different user, should not raise
+    dependency(current_user=user_a)  # user_a at their limit
+    dependency(current_user=user_b)  # different user, should not raise
 
 
-@pytest.mark.asyncio
-async def test_fails_open_on_redis_error(monkeypatch):
+def test_fails_open_on_redis_error(monkeypatch):
     monkeypatch.setattr(rate_limit, "get_settings", lambda: _fake_settings(1))
     fake_redis = _FakeRedisClient(incr_side_effect=RedisError("connection refused"))
     monkeypatch.setattr(
@@ -113,4 +108,4 @@ async def test_fails_open_on_redis_error(monkeypatch):
     )
 
     dependency = rate_limit.enforce_user_rate_limit("chat")
-    await dependency(current_user=SimpleNamespace(id=uuid4()))  # should not raise
+    dependency(current_user=SimpleNamespace(id=uuid4()))  # should not raise

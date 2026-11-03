@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from logging import getLogger
 from typing import Optional
 
@@ -21,7 +22,13 @@ CHANNEL = "slack"
 
 
 class SlackInstallationStore(AsyncInstallationStore):
+    """Bolt requires the async interface; the database work runs in a thread
+    so it stays off the event loop."""
+
     async def async_save(self, installation: Installation) -> None:
+        await asyncio.to_thread(self._save, installation)
+
+    def _save(self, installation: Installation) -> None:
         team_id = installation.team_id or ""
         sensitive = {"bot_token": installation.bot_token}
         with session_scope() as db:
@@ -46,6 +53,9 @@ class SlackInstallationStore(AsyncInstallationStore):
         is_enterprise_install: Optional[bool] = False,
     ) -> Optional[Installation]:
         lookup_id = team_id or enterprise_id or ""
+        return await asyncio.to_thread(self._find, lookup_id, user_id)
+
+    def _find(self, lookup_id: str, user_id: Optional[str]) -> Optional[Installation]:
         with session_scope() as db:
             repo = ChannelInstallationRepository(db)
             record = repo.get_by_channel_and_account(CHANNEL, lookup_id)

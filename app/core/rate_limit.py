@@ -30,7 +30,9 @@ def enforce_user_rate_limit(scope: str):
     this is a no-op — rate limiting stays opt-in via that existing config.
     """
 
-    async def _dependency(current_user=Depends(get_current_user)) -> None:
+    # Plain def: the Redis client is sync, so FastAPI runs this in the
+    # threadpool rather than on the event loop.
+    def _dependency(current_user=Depends(get_current_user)) -> None:
         limit = get_settings().conversa_rate_limit_per_user_per_minute
         if not limit:
             return
