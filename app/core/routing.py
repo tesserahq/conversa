@@ -59,26 +59,15 @@ class Router:
             self._linker.get_or_resolve_linked_user, msg.channel, msg.sender_id
         )
         if linked_user is None:
-            return self._create_link_outbound_message(msg)
+            # Minting the link token is a sync Identies call.
+            return await asyncio.to_thread(self._create_link_outbound_message, msg)
         resolved_user_id = user_id or linked_user.id
         if resolved_user_id is None:
             return self._create_link_resolution_error_outbound_message(msg)
 
-        with session_scope() as db:
-            session_manager = SessionManager(db)
-            session = session_manager.get_or_create_session(msg, resolved_user_id)
-            session_id = session.id
-            history = session_manager.get_history_for_llm(session_id, limit=50)
-            context = self._load_context_for_user(db, session.user_id)
-            logger.info(
-                "Prepared LLM input for session=%s user_id=%s channel=%s history_messages=%d context_loaded=%s context_keys=%s",
-                session_id,
-                session.user_id,
-                msg.channel,
-                len(history),
-                context is not None,
-                sorted(context.keys()) if isinstance(context, dict) else [],
-            )
+        session_id, history, context = await asyncio.to_thread(
+            self._load_channel_turn, msg, resolved_user_id
+        )
 
         reply_text = await self._llm.run(
             msg,
@@ -95,9 +84,37 @@ class Router:
             reply_to=msg.message_id,
             media=[],
         )
+        await asyncio.to_thread(self._save_turn, session_id, msg, outbound)
+        return outbound
+
+    def _load_channel_turn(
+        self, msg: InboundMessage, user_id: UUID
+    ) -> tuple[UUID, list[dict], Any | None]:
+        """Resolve/create the channel session and load its history + context
+        in one short session (run in a thread, so the event loop and the
+        pool are both free while the LLM runs)."""
+        with session_scope() as db:
+            session_manager = SessionManager(db)
+            session = session_manager.get_or_create_session(msg, user_id)
+            session_id = session.id
+            history = session_manager.get_history_for_llm(session_id, limit=50)
+            context = self._load_context_for_user(db, session.user_id)
+            logger.info(
+                "Prepared LLM input for session=%s user_id=%s channel=%s history_messages=%d context_loaded=%s context_keys=%s",
+                session_id,
+                session.user_id,
+                msg.channel,
+                len(history),
+                context is not None,
+                sorted(context.keys()) if isinstance(context, dict) else [],
+            )
+        return session_id, history, context
+
+    def _save_turn(
+        self, session_id: UUID, msg: InboundMessage, outbound: OutboundMessage
+    ) -> None:
         with session_scope() as db:
             SessionManager(db).add_turn(session_id, msg, outbound)
-        return outbound
 
     async def _prepare_api_message(
         self,
@@ -111,7 +128,13 @@ class Router:
         """
         if await asyncio.to_thread(self._users.ensure_user, user_id) is None:
             raise UnknownUserError(user_id)
+        return await asyncio.to_thread(
+            self._load_api_turn, user_id, user_content, session_id
+        )
 
+    def _load_api_turn(
+        self, user_id: UUID, user_content: str, session_id: UUID | None
+    ) -> tuple[InboundMessage, UUID, list[dict], Any | None]:
         with session_scope() as db:
             session_manager = SessionManager(db)
             session = None
@@ -195,8 +218,7 @@ class Router:
             reply_to=msg.message_id,
             media=[],
         )
-        with session_scope() as db:
-            SessionManager(db).add_turn(resolved_session_id, msg, outbound)
+        await asyncio.to_thread(self._save_turn, resolved_session_id, msg, outbound)
         return outbound, resolved_session_id, result
 
     async def stream_api_message(
@@ -257,8 +279,9 @@ class Router:
                         reply_to=msg.message_id,
                         media=[],
                     )
-                    with session_scope() as db:
-                        SessionManager(db).add_turn(resolved_session_id, msg, outbound)
+                    await asyncio.to_thread(
+                        self._save_turn, resolved_session_id, msg, outbound
+                    )
                 await queue.put(("error", error) if error else ("done", None))
 
         task = asyncio.create_task(_produce())
